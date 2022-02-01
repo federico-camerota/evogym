@@ -1,4 +1,4 @@
-# Evolution Gym
+# Evolution Gym (a Fork)
 
 A large-scale benchmark for co-optimizing the design and control of soft robots. As seen in [Evolution Gym: A Large-Scale Benchmark for Evolving Soft Robots](https://evolutiongym.github.io/) (**NeurIPS 2021**).
 
