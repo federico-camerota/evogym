@@ -27,7 +27,7 @@ class WalkingFlat(BenchmarkBase):
         num_robot_points = self.object_pos_at_time(self.get_time(), "robot").size
 
         self.action_space = spaces.Box(low= 0.6, high=1.6, shape=(num_actuators,), dtype=np.float)
-        self.observation_space = spaces.Box(low=-100.0, high=100.0, shape=(2 + num_robot_points,), dtype=np.float)
+        self.observation_space = spaces.Box(low=-100.0, high=100.0, shape=(num_robot_points + num_robot_points,), dtype=np.float)
 
     def step(self, action):
 
@@ -42,10 +42,9 @@ class WalkingFlat(BenchmarkBase):
 
         # observation
         obs = np.concatenate((
-            self.get_vel_com_obs("robot"),
+            self.object_vel_at_time(self.get_time(), "robot").reshape(1, -1).ravel(),
             self.get_relative_pos_obs("robot"),
             ))
-
         # compute reward
         com_1 = np.mean(pos_1, 1)
         com_2 = np.mean(pos_2, 1)
@@ -67,10 +66,9 @@ class WalkingFlat(BenchmarkBase):
     def reset(self):
         
         super().reset()
-
         # observation
         obs = np.concatenate((
-            self.get_vel_com_obs("robot"),
+            self.object_vel_at_time(self.get_time(), "robot").reshape(1, -1).ravel(),
             self.get_relative_pos_obs("robot"),
             ))
 
