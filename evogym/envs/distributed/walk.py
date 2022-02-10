@@ -3,6 +3,8 @@ import numpy as np
 from evogym.envs import WalkingFlat
 from gym import spaces
 
+import abc_sr.evogym_utils as evoutils
+
 
 class DistributedWalkingFlat(WalkingFlat):
 
@@ -13,8 +15,10 @@ class DistributedWalkingFlat(WalkingFlat):
 
         # override observation space
 
-        num_robot_points = self.object_pos_at_time(self.get_time(), "robot").size
-        self.observation_space = spaces.Box(low=-100.0, high=100.0, shape=(num_robot_points + num_robot_points,), dtype=np.float)
+        self.robot_shape = body.shape
+
+        self.action_space = spaces.Box(low= 0.6, high=1.6, shape=(1,), dtype=np.float)
+        self.observation_space = spaces.Box(low=-100.0, high=100.0, shape=(5*(4 + 1),), dtype=np.float)
 
     def step(self, action):
 
@@ -22,10 +26,9 @@ class DistributedWalkingFlat(WalkingFlat):
         obs, reward, done, info = super().step(action)
 
         # refine observation
-        obs = np.concatenate((
-            self.object_vel_at_time(self.get_time(), "robot").reshape(1, -1).ravel(),
-            self.get_relative_pos_obs("robot"),
-        ))
+        vel = self.object_vel_at_time(self.get_time(), "robot")
+        pos = self.get_relative_pos_obs("robot").reshape((2, -1))
+        obs = np.hstack([pos, vel])
 
         # observation, reward, has simulation met termination conditions, debugging info
         return obs, reward, done, info
@@ -34,9 +37,8 @@ class DistributedWalkingFlat(WalkingFlat):
 
         super().reset()
         # refine observation
-        obs = np.concatenate((
-            self.object_vel_at_time(self.get_time(), "robot").reshape(1, -1).ravel(),
-            self.get_relative_pos_obs("robot"),
-        ))
+        vel = self.object_vel_at_time(self.get_time(), "robot")
+        pos = self.get_relative_pos_obs("robot").reshape((2, -1))
+        obs = np.hstack([pos, vel])
 
         return obs
