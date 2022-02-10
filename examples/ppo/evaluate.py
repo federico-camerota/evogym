@@ -9,18 +9,18 @@ import abc_sr.evogym_utils as evoutils
 # https://github.com/ikostrikov/pytorch-a2c-ppo-acktr-gail
 
 def evaluate(
-    num_evals, 
-    actor_critic, 
-    obs_rms, 
-    env_name, 
-    robot_structure, 
-    seed, 
-    num_processes, 
+    num_evals,
+    actor_critic,
+    obs_rms,
+    env_name,
+    robot_structure,
+    seed,
+    num_processes,
     eval_log_dir,
     device, n_actuators):
 
     num_processes = min(num_processes, num_evals)
-    
+
     eval_envs = make_vec_envs(env_name, robot_structure, seed + num_processes, num_processes,
                               None, eval_log_dir, device, True)
 
@@ -33,11 +33,11 @@ def evaluate(
 
     obs = eval_envs.reset()
     robot_shape = robot_structure[0].shape
-    voxel_ids = torch.nonzero((robot_structure[1] == evoutils.VoxelType.H_ACT.value) + (robot_structure[1] == evoutils.VoxelType.V_ACT.value), as_tuple=True)[0]
+    voxel_ids = evoutils.actuators_ids(robot_structure[0])
     mass_matrix = evoutils.mass_pos_matrix(robot_structure[0])
-    sa_matrix = [evoutils.init_state_action_matrix(robot_structure[0], 3, 1) for _ in range(num_processes)]
+    sa_matrix = [evoutils.init_state_action_matrix(robot_structure[0], 16, 1).to(device) for _ in range(n_proc)]
 
-    obs_mat = [evoutils.mass_obs_matrix(mass_matrix, obs[i], device).unsqueeze(0) for i in range(num_processes)]
+    obs_mat = [evoutils.mass_obs_matrix(mass_matrix, obs[i], device) for i in range(num_processes)]
 
     voxel_input = torch.cat([evoutils.get_voxel_input(robot_shape, obs_i, sa_i, voxel_ids) for obs_i, sa_i in zip(obs_mat, sa_matrix)])
 
@@ -53,13 +53,14 @@ def evaluate(
                 eval_masks,
                 deterministic=True)
 
-        sa_pairs = torch.hstack([voxel_input, action]).reshape((num_processes, n_actuators, -1))
+        sa_pairs = torch.vstack(obs_mat)
+        sa_pairs = torch.hstack([sa_pairs, action]).reshape((n_proc, n_actuators, -1)).to(device)
         actions = action.reshape((num_processes, -1))
 
         # Obser reward and next obs
         obs, _, done, infos = eval_envs.step(action)
 
-        obs_mat = [evoutils.mass_obs_matrix(mass_matrix, obs[i], device).unsqueeze(0) for i in range(num_processes)]
+        obs_mat = [evoutils.mass_obs_matrix(mass_matrix, obs[i], device) for i in range(num_processes)]
         sa_matrix = [evoutils.update_state_action_matrix(robot_shape, sa_i, sa, voxel_ids) for sa, sa_i in zip(sa_pairs, sa_matrix)]
 
         voxel_input = torch.cat([evoutils.get_voxel_input(robot_shape, obs_i, sa_i, voxel_ids) for obs_i, sa_i in
