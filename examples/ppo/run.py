@@ -69,7 +69,10 @@ def run_ppo(
         dummy_env.voxel_observation_space.shape,
         dummy_env.voxel_action_space,
         base_kwargs={'recurrent': args.recurrent_policy})
-    actor_critic.to(device)
+    #actor_critic.to(device)
+    actor_critic.cuda()
+    torch.cuda.synchronize()
+    print("Done ac.cuda()")
 
     agent = algo.PPO(
         actor_critic,
@@ -100,6 +103,7 @@ def run_ppo(
     #voxel_input = [evoutils.get_voxel_input(robot_shape, obs_i, sa_i, voxel_ids).to(device) for obs_i, sa_i in zip(obs_mat, sa_matrix)]
     #print("voxel input shape:", [vi.shape for vi in voxel_input])
     #voxel_input = torch.cat(voxel_input)
+    #print(dummy_env.observation_space.shape, obs.shape)
 
     mass_matrix, sa_matrix, obs_mat, voxel_input = init_input(obs, robot_structure, robot_shape, voxel_ids,  n_proc, device)
 

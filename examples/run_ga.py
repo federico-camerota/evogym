@@ -9,10 +9,10 @@ if __name__ == "__main__":
     np.random.seed(seed)
 
     run_ga(
-        pop_size = 5,
-        structure_shape = (5,5),
+        pop_size = 3,
+        structure_shape = (3,3),
         experiment_name = "test_ga",
-        max_evaluations = 10,
+        max_evaluations = 5,
         train_iters = 50,
         num_cores = 4,
     )

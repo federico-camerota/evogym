@@ -75,7 +75,9 @@ def init_input(obs, robot_structure, robot_shape, voxel_ids,  n_proc, device):
     mass_matrix = evoutils.mass_pos_matrix(robot_structure[0]).to(device)
     sa_matrix = [evoutils.init_state_action_matrix(robot_structure[0], 16, 1).to(device) for _ in range(n_proc)]
 
-
+    #print(torch.sum(mass_matrix), obs.shape)
+    #if(torch.sum(mass_matrix).item() != obs.shape[-1]):
+    #    print("Bad dims\n", mass_matrix, "\n------------\n", robot_structure, "\n------------\n", obs[0], "\n------------\n")
     obs_mat = [evoutils.mass_obs_matrix(mass_matrix, ob, device).to(device) for ob in obs]
 
     voxel_input = [evoutils.get_voxel_input(robot_shape, obs_i, sa_i, voxel_ids).to(device) for obs_i, sa_i in zip(obs_mat, sa_matrix)]
