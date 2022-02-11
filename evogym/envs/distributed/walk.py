@@ -18,7 +18,7 @@ class DistributedWalkingFlat(WalkingFlat):
         self.robot_shape = body.shape
 
         self.action_space = spaces.Box(low= 0.6, high=1.6, shape=(1,), dtype=np.float)
-        self.observation_space = spaces.Box(low=-100.0, high=100.0, shape=(5*(4 + 1),), dtype=np.float)
+        self.observation_space = spaces.Box(low=-100.0, high=100.0, shape=(4 + 4*(4 + 1),), dtype=np.float)
 
     def step(self, action):
 
@@ -38,7 +38,7 @@ class DistributedWalkingFlat(WalkingFlat):
         super().reset()
         # refine observation
         vel = self.object_vel_at_time(self.get_time(), "robot")
-        pos = self.get_relative_pos_obs("robot").reshape((2, -1))
+        pos = self.get_relative_pos_obs("robot").reshape((-1, 2)).T
         obs = np.hstack([pos, vel])
 
         return obs

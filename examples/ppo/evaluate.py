@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from ppo import utils
 from ppo.envs import make_vec_envs
+from ppo.utils import init_input, update_input
 
 import abc_sr.evogym_utils as evoutils
 
@@ -22,24 +23,24 @@ def evaluate(
     num_processes = min(num_processes, num_evals)
 
     eval_envs = make_vec_envs(env_name, robot_structure, seed + num_processes, num_processes,
-                              None, eval_log_dir, device, True)
+                              None, eval_log_dir, device, False)
 
-    vec_norm = utils.get_vec_normalize(eval_envs)
-    if vec_norm is not None:
-        vec_norm.eval()
-        vec_norm.obs_rms = obs_rms
+    #vec_norm = utils.get_vec_normalize(eval_envs)
+    #if vec_norm is not None:
+    #    vec_norm.eval()
+    #    vec_norm.obs_rms = obs_rms
 
     eval_episode_rewards = []
 
     obs = eval_envs.reset()
+    robot_structure = (torch.Tensor(robot_structure[0]), torch.Tensor(robot_structure[1]))
     robot_shape = robot_structure[0].shape
+    n_proc = num_processes
     voxel_ids = evoutils.actuators_ids(robot_structure[0])
-    mass_matrix = evoutils.mass_pos_matrix(robot_structure[0])
-    sa_matrix = [evoutils.init_state_action_matrix(robot_structure[0], 16, 1).to(device) for _ in range(n_proc)]
+    n_actuators = len(voxel_ids[0])
 
-    obs_mat = [evoutils.mass_obs_matrix(mass_matrix, obs[i], device) for i in range(num_processes)]
+    mass_matrix, sa_matrix, obs_mat, voxel_input = init_input(obs, robot_structure, robot_shape, voxel_ids,  n_proc, device)
 
-    voxel_input = torch.cat([evoutils.get_voxel_input(robot_shape, obs_i, sa_i, voxel_ids) for obs_i, sa_i in zip(obs_mat, sa_matrix)])
 
     eval_recurrent_hidden_states = torch.zeros(
         num_processes*n_actuators, actor_critic.recurrent_hidden_state_size, device=device)
@@ -53,23 +54,18 @@ def evaluate(
                 eval_masks,
                 deterministic=True)
 
-        sa_pairs = torch.vstack(obs_mat)
-        sa_pairs = torch.hstack([sa_pairs, action]).reshape((n_proc, n_actuators, -1)).to(device)
-        actions = action.reshape((num_processes, -1))
+        actions = action.reshape((n_proc, -1))
 
         # Obser reward and next obs
-        obs, _, done, infos = eval_envs.step(action)
+        obs, _, done, infos = eval_envs.step(actions)
 
-        obs_mat = [evoutils.mass_obs_matrix(mass_matrix, obs[i], device) for i in range(num_processes)]
-        sa_matrix = [evoutils.update_state_action_matrix(robot_shape, sa_i, sa, voxel_ids) for sa, sa_i in zip(sa_pairs, sa_matrix)]
+        obs_mat, voxel_input = update_input(obs, obs_mat, mass_matrix, sa_matrix, action, robot_shape, voxel_ids, n_proc, n_actuators, device)
 
-        voxel_input = torch.cat([evoutils.get_voxel_input(robot_shape, obs_i, sa_i, voxel_ids) for obs_i, sa_i in
-                                 zip(obs_mat, sa_matrix)])
 
         eval_masks = torch.tensor(
             [[0.0] if done_ else [1.0] for done_ in done],
             dtype=torch.float32,
-            device=device).repeat(1,n_actuators).flatten()
+            device=device).repeat(1,n_actuators).reshape((-1, 1))
 
         for info in infos:
             if 'episode' in info.keys():

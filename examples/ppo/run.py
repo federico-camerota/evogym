@@ -7,6 +7,7 @@ from collections import deque
 import torch
 
 from ppo import utils
+from ppo.utils import init_input, update_input
 from ppo.arguments import get_args
 from ppo.evaluate import evaluate
 from ppo.envs import make_vec_envs
@@ -55,17 +56,18 @@ def run_ppo(
     utils.cleanup_log_dir(eval_log_dir)
 
     torch.set_num_threads(1)
-    #device = torch.device("cuda:0" if args.cuda else "cpu")
-    device = torch.device("cpu")
+    device = torch.device("cuda:0" if args.cuda else "cpu")
+    #device = torch.device("cpu")
 
     robot_structure = (torch.from_numpy(structure[0]), torch.from_numpy(structure[1]))
 
+    dummy_env = gym.make(args.env_name, body=structure[0])
     envs = make_vec_envs(args.env_name, structure, args.seed, args.num_processes,
                          args.gamma, args.log_dir, device, False)
 
     actor_critic = Policy(
-        envs.observation_space.shape,
-        envs.action_space,
+        dummy_env.voxel_observation_space.shape,
+        dummy_env.voxel_action_space,
         base_kwargs={'recurrent': args.recurrent_policy})
     actor_critic.to(device)
 
@@ -83,28 +85,32 @@ def run_ppo(
     robot_shape = robot_structure[0].shape
     n_proc = args.num_processes
     voxel_ids = evoutils.actuators_ids(robot_structure[0])
-    mass_matrix = evoutils.mass_pos_matrix(robot_structure[0]).to(device)
-    sa_matrix = [evoutils.init_state_action_matrix(robot_structure[0], 16, 1).to(device) for _ in range(n_proc)]
+    n_actuators = len(voxel_ids[0])
+
+    #mass_matrix = evoutils.mass_pos_matrix(robot_structure[0]).to(device)
+    #sa_matrix = [evoutils.init_state_action_matrix(robot_structure[0], 16, 1).to(device) for _ in range(n_proc)]
     #print("sa mat shape:", [vi.shape for vi in sa_matrix])
 
 
     obs = envs.reset()
     #print("obs shape", obs.shape)
-    n_actuators = len(voxel_ids[0])
-    obs_mat = [evoutils.mass_obs_matrix(mass_matrix, ob, device).to(device) for ob in obs]
+    #obs_mat = [evoutils.mass_obs_matrix(mass_matrix, ob, device).to(device) for ob in obs]
     #print("obs mat shape:", [vi.shape for vi in obs_mat])
 
-    voxel_input = [evoutils.get_voxel_input(robot_shape, obs_i, sa_i, voxel_ids).to(device) for obs_i, sa_i in zip(obs_mat, sa_matrix)]
+    #voxel_input = [evoutils.get_voxel_input(robot_shape, obs_i, sa_i, voxel_ids).to(device) for obs_i, sa_i in zip(obs_mat, sa_matrix)]
     #print("voxel input shape:", [vi.shape for vi in voxel_input])
-    voxel_input = torch.cat(voxel_input)
+    #voxel_input = torch.cat(voxel_input)
+
+    mass_matrix, sa_matrix, obs_mat, voxel_input = init_input(obs, robot_structure, robot_shape, voxel_ids,  n_proc, device)
 
     rollouts = RolloutStorage(args.num_steps, args.num_processes * n_actuators,
-                              envs.observation_space.shape, envs.action_space,
+                              dummy_env.voxel_observation_space.shape, dummy_env.voxel_action_space,
                               actor_critic.recurrent_hidden_state_size)
 
 
     #print(n_actuators, n_proc, rollouts.obs[0].shape, voxel_input.shape)
     rollouts.obs[0].copy_(voxel_input)
+    rollouts.to(device)
 
     episode_rewards = deque(maxlen=10)
 
@@ -132,19 +138,21 @@ def run_ppo(
                     rollouts.obs[step], rollouts.recurrent_hidden_states[step],
                     rollouts.masks[step])
 
-            sa_pairs = torch.vstack([evoutils.get_voxel_obs(ob_mat, voxel_ids) for ob_mat in obs_mat])
-            sa_pairs = torch.hstack([sa_pairs, action]).reshape((n_proc, n_actuators, -1)).to(device)
-            actions = action.reshape((n_proc, -1))
+            #sa_pairs = torch.vstack([evoutils.get_voxel_obs(ob_mat, voxel_ids) for ob_mat in obs_mat])
+            #sa_pairs = torch.hstack([sa_pairs, action]).reshape((n_proc, n_actuators, -1)).to(device)
+            actions = action.reshape((n_proc, -1)).to(device)
 
             # Obser reward and next obs
             obs, reward, done, infos = envs.step(actions)
-            obs_mat = [evoutils.mass_obs_matrix(mass_matrix, obs[i], device).to(device) for i in range(n_proc)]
-            [evoutils.update_state_action_matrix(sa_i, sa, voxel_ids) for sa, sa_i in zip(sa_pairs, sa_matrix)]
+            #obs_mat = [evoutils.mass_obs_matrix(mass_matrix, obs[i], device).to(device) for i in range(n_proc)]
+            #[evoutils.update_state_action_matrix(sa_i, sa, voxel_ids) for sa, sa_i in zip(sa_pairs, sa_matrix)]
 
             reward = reward.repeat(1, n_actuators).reshape((-1, 1)).to(device)
 
-            voxel_input = torch.cat([evoutils.get_voxel_input(robot_shape, obs_i, sa_i, voxel_ids) for obs_i, sa_i in
-                                     zip(obs_mat, sa_matrix)]).to(device)
+            #voxel_input = torch.cat([evoutils.get_voxel_input(robot_shape, obs_i, sa_i, voxel_ids) for obs_i, sa_i in
+            #                         zip(obs_mat, sa_matrix)]).to(device)
+
+            obs_mat, voxel_input = update_input(obs ,obs_mat, mass_matrix, sa_matrix, action, robot_shape, voxel_ids, n_proc, n_actuators, device)
 
             # track rewards
             for info in infos:
@@ -157,12 +165,12 @@ def run_ppo(
                         avg_rewards_tracker.append(np.average(np.array(rewards_tracker[-10:])))
 
             # If done then clean the history of observations.
-            masks = torch.FloatTensor( [[0.0] if done_ else [1.0] for done_ in done]).repeat(1,n_actuators).reshape((-1, 1))
+            masks = torch.FloatTensor( [[0.0] if done_ else [1.0] for done_ in done]).repeat(1,n_actuators).reshape((-1, 1)).to(device)
             bad_masks = torch.FloatTensor(
                 [[0.0] if 'bad_transition' in info.keys() else [1.0]
-                 for info in infos]).repeat(1,n_actuators).reshape((-1, 1))
+                 for info in infos]).repeat(1,n_actuators).reshape((-1, 1)).to(device)
 
-            rollouts.insert(voxel_input, recurrent_hidden_states, action, action_log_prob, value, reward, masks, bad_masks)
+            rollouts.insert(voxel_input, recurrent_hidden_states.to(device), action, action_log_prob, value, reward, masks, bad_masks)
 
         with torch.no_grad():
             next_value = actor_critic.get_value(
@@ -193,8 +201,9 @@ def run_ppo(
         if (args.eval_interval is not None and len(episode_rewards) > 1
                 and j % args.eval_interval == 0):
 
-            obs_rms = utils.get_vec_normalize(envs).obs_rms
-            determ_avg_reward = evaluate(args.num_evals, actor_critic, obs_rms, args.env_name, robot_structure, args.seed,
+            #obs_rms = utils.get_vec_normalize(envs).obs_rms
+            obs_rms = None
+            determ_avg_reward = evaluate(args.num_evals, actor_critic, obs_rms, args.env_name, structure, args.seed,
                      args.num_processes, eval_log_dir, device, n_actuators)
 
             if verbose:
