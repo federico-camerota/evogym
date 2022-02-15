@@ -70,9 +70,9 @@ def run_ppo(
         dummy_env.voxel_action_space,
         base_kwargs={'recurrent': args.recurrent_policy})
     #actor_critic.to(device)
-    actor_critic.cuda()
-    torch.cuda.synchronize()
-    print("Done ac.cuda()")
+    actor_critic.to(device)
+    #torch.cuda.synchronize()
+    #print("Done ac.cuda()")
 
     agent = algo.PPO(
         actor_critic,
@@ -105,7 +105,9 @@ def run_ppo(
     #voxel_input = torch.cat(voxel_input)
     #print(dummy_env.observation_space.shape, obs.shape)
 
-    mass_matrix, sa_matrix, obs_mat, voxel_input = init_input(obs, robot_structure, robot_shape, voxel_ids,  n_proc, device)
+    #mass_matrix, sa_matrix, obs_mat, voxel_input = init_input(obs, robot_structure, robot_shape, voxel_ids,  n_proc, device)
+
+    voxel_masses, sa_matrix, voxel_input = init_input(obs, robot_structure, robot_shape, voxel_ids, n_proc, device)
 
     rollouts = RolloutStorage(args.num_steps, args.num_processes * n_actuators,
                               dummy_env.voxel_observation_space.shape, dummy_env.voxel_action_space,
@@ -156,7 +158,8 @@ def run_ppo(
             #voxel_input = torch.cat([evoutils.get_voxel_input(robot_shape, obs_i, sa_i, voxel_ids) for obs_i, sa_i in
             #                         zip(obs_mat, sa_matrix)]).to(device)
 
-            obs_mat, voxel_input = update_input(obs ,obs_mat, mass_matrix, sa_matrix, action, robot_shape, voxel_ids, n_proc, n_actuators, device)
+            #obs_mat, voxel_input = update_input(obs ,obs_mat, mass_matrix, sa_matrix, action, robot_shape, voxel_ids, n_proc, n_actuators, device)
+            voxel_input = update_input(obs, voxel_masses, sa_matrix, action, robot_shape, voxel_ids, n_proc, n_actuators, device)
 
             # track rewards
             for info in infos:

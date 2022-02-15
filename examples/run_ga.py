@@ -10,7 +10,7 @@ if __name__ == "__main__":
 
     run_ga(
         pop_size = 3,
-        structure_shape = (3,3),
+        structure_shape = (5,5),
         experiment_name = "test_ga",
         max_evaluations = 5,
         train_iters = 50,

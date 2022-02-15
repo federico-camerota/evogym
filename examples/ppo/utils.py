@@ -72,28 +72,31 @@ def cleanup_log_dir(log_dir):
 
 def init_input(obs, robot_structure, robot_shape, voxel_ids,  n_proc, device):
 
-    mass_matrix = evoutils.mass_pos_matrix(robot_structure[0]).to(device)
+    voxel_masses = evoutils.voxel_masses(robot_structure[0]).to(device)
+    #print("input: ", voxel_masses, robot_structure)
     sa_matrix = [evoutils.init_state_action_matrix(robot_structure[0], 16, 1).to(device) for _ in range(n_proc)]
 
     #print(torch.sum(mass_matrix), obs.shape)
     #if(torch.sum(mass_matrix).item() != obs.shape[-1]):
     #    print("Bad dims\n", mass_matrix, "\n------------\n", robot_structure, "\n------------\n", obs[0], "\n------------\n")
-    obs_mat = [evoutils.mass_obs_matrix(mass_matrix, ob, device).to(device) for ob in obs]
+    #obs_mat = [evoutils.mass_obs_matrix(mass_matrix, ob, device).to(device) for ob in obs]
 
-    voxel_input = [evoutils.get_voxel_input(robot_shape, obs_i, sa_i, voxel_ids).to(device) for obs_i, sa_i in zip(obs_mat, sa_matrix)]
+    voxel_input = [evoutils.get_voxel_input(robot_shape, obs_i, sa_i, voxel_ids, voxel_masses).to(device) for obs_i, sa_i in zip(obs, sa_matrix)]
     voxel_input = torch.cat(voxel_input)
 
-    return mass_matrix, sa_matrix, obs_mat, voxel_input
+    return voxel_masses, sa_matrix, voxel_input
 
-def update_input(obs, obs_mat, mass_matrix, sa_matrix, action, robot_shape, voxel_ids, n_proc, n_actuators, device):
+def update_input(obs, voxel_masses, sa_matrix, action, robot_shape, voxel_ids, n_proc, n_actuators, device):
 
-    sa_pairs = torch.vstack([evoutils.get_voxel_obs(ob_mat, voxel_ids) for ob_mat in obs_mat])
+
+    #obs_mat = [evoutils.mass_obs_matrix(mass_matrix, obs[i], device).to(device) for i in range(n_proc)]
+
+    voxel_input = torch.cat([evoutils.get_voxel_input(robot_shape, obs_i, sa_i, voxel_ids, voxel_masses) for obs_i, sa_i in
+                             zip(obs, sa_matrix)]).to(device)
+
+    #sa_pairs = torch.vstack([evoutils.get_voxel_obs(ob_mat, voxel_ids) for ob_mat in obs_mat])
+    sa_pairs = torch.vstack([evoutils.get_voxel_obs(ob_i, voxel_masses) for ob_i in obs])
     sa_pairs = torch.hstack([sa_pairs, action]).reshape((n_proc, n_actuators, -1)).to(device)
-
-    obs_mat = [evoutils.mass_obs_matrix(mass_matrix, obs[i], device).to(device) for i in range(n_proc)]
     [evoutils.update_state_action_matrix(sa_i, sa, voxel_ids) for sa, sa_i in zip(sa_pairs, sa_matrix)]
 
-    voxel_input = torch.cat([evoutils.get_voxel_input(robot_shape, obs_i, sa_i, voxel_ids) for obs_i, sa_i in
-                             zip(obs_mat, sa_matrix)]).to(device)
-
-    return obs_mat, voxel_input
+    return voxel_input

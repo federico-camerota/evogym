@@ -39,7 +39,8 @@ def evaluate(
     voxel_ids = evoutils.actuators_ids(robot_structure[0])
     n_actuators = len(voxel_ids[0])
 
-    mass_matrix, sa_matrix, obs_mat, voxel_input = init_input(obs, robot_structure, robot_shape, voxel_ids,  n_proc, device)
+    #mass_matrix, sa_matrix, obs_mat, voxel_input = init_input(obs, robot_structure, robot_shape, voxel_ids,  n_proc, device)
+    voxel_masses, sa_matrix, voxel_input = init_input(obs, robot_structure, robot_shape, voxel_ids, n_proc, device)
 
 
     eval_recurrent_hidden_states = torch.zeros(
@@ -59,8 +60,9 @@ def evaluate(
         # Obser reward and next obs
         obs, _, done, infos = eval_envs.step(actions)
 
-        obs_mat, voxel_input = update_input(obs, obs_mat, mass_matrix, sa_matrix, action, robot_shape, voxel_ids, n_proc, n_actuators, device)
-
+        #obs_mat, voxel_input = update_input(obs, obs_mat, mass_matrix, sa_matrix, action, robot_shape, voxel_ids, n_proc, n_actuators, device)
+        voxel_input = update_input(obs, voxel_masses, sa_matrix, action, robot_shape, voxel_ids, n_proc, n_actuators,
+                                   device)
 
         eval_masks = torch.tensor(
             [[0.0] if done_ else [1.0] for done_ in done],
