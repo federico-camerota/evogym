@@ -7,7 +7,6 @@ from collections import deque
 import torch
 
 from ppo import utils
-from ppo.utils import init_input, update_input
 from ppo.arguments import get_args
 from ppo.evaluate import evaluate
 from ppo.envs import make_vec_envs
@@ -17,10 +16,9 @@ from a2c_ppo_acktr.algo import gail
 from a2c_ppo_acktr.model import Policy
 from a2c_ppo_acktr.storage import RolloutStorage
 
-import abc_sr.evogym_utils as evoutils
 import gym
 
-import evogym.envs
+from abc_sr.agents import MLPAgent
 import abc_sr.envs
 
 # Derived from
@@ -69,7 +67,7 @@ def run_ppo(
         dummy_env.voxel_observation_space.shape,
         dummy_env.voxel_action_space,
         base_kwargs={'recurrent': args.recurrent_policy})
-    #actor_critic.to(device)
+
     actor_critic.to(device)
     #torch.cuda.synchronize()
     #print("Done ac.cuda()")
@@ -85,36 +83,22 @@ def run_ppo(
         eps=args.eps,
         max_grad_norm=args.max_grad_norm)
 
-    robot_shape = robot_structure[0].shape
     n_proc = args.num_processes
-    voxel_ids = evoutils.actuators_ids(robot_structure[0])
-    n_actuators = len(voxel_ids[0])
-
-    #mass_matrix = evoutils.mass_pos_matrix(robot_structure[0]).to(device)
-    #sa_matrix = [evoutils.init_state_action_matrix(robot_structure[0], 16, 1).to(device) for _ in range(n_proc)]
-    #print("sa mat shape:", [vi.shape for vi in sa_matrix])
-
-
     obs = envs.reset()
-    #print("obs shape", obs.shape)
-    #obs_mat = [evoutils.mass_obs_matrix(mass_matrix, ob, device).to(device) for ob in obs]
-    #print("obs mat shape:", [vi.shape for vi in obs_mat])
 
-    #voxel_input = [evoutils.get_voxel_input(robot_shape, obs_i, sa_i, voxel_ids).to(device) for obs_i, sa_i in zip(obs_mat, sa_matrix)]
-    #print("voxel input shape:", [vi.shape for vi in voxel_input])
-    #voxel_input = torch.cat(voxel_input)
-    #print(dummy_env.observation_space.shape, obs.shape)
+    voxel_ob_len = dummy_env.observation_space.shape[0]
+    action_len = dummy_env.voxel_action_space.shape[0]
+    mlp_agent = MLPAgent(robot_structure, n_proc, device, voxel_ob_len, action_len)
 
-    #mass_matrix, sa_matrix, obs_mat, voxel_input = init_input(obs, robot_structure, robot_shape, voxel_ids,  n_proc, device)
+    n_actuators = mlp_agent._n_actuators
 
-    voxel_masses, sa_matrix, voxel_input = init_input(obs, robot_structure, robot_shape, voxel_ids, n_proc, device)
+    voxel_input = mlp_agent.init(obs)
 
     rollouts = RolloutStorage(args.num_steps, args.num_processes * n_actuators,
                               dummy_env.voxel_observation_space.shape, dummy_env.voxel_action_space,
                               actor_critic.recurrent_hidden_state_size)
 
 
-    #print(n_actuators, n_proc, rollouts.obs[0].shape, voxel_input.shape)
     rollouts.obs[0].copy_(voxel_input)
     rollouts.to(device)
 
@@ -144,22 +128,14 @@ def run_ppo(
                     rollouts.obs[step], rollouts.recurrent_hidden_states[step],
                     rollouts.masks[step])
 
-            #sa_pairs = torch.vstack([evoutils.get_voxel_obs(ob_mat, voxel_ids) for ob_mat in obs_mat])
-            #sa_pairs = torch.hstack([sa_pairs, action]).reshape((n_proc, n_actuators, -1)).to(device)
             actions = action.reshape((n_proc, -1)).to(device)
 
             # Obser reward and next obs
             obs, reward, done, infos = envs.step(actions)
-            #obs_mat = [evoutils.mass_obs_matrix(mass_matrix, obs[i], device).to(device) for i in range(n_proc)]
-            #[evoutils.update_state_action_matrix(sa_i, sa, voxel_ids) for sa, sa_i in zip(sa_pairs, sa_matrix)]
 
             reward = reward.repeat(1, n_actuators).reshape((-1, 1)).to(device)
 
-            #voxel_input = torch.cat([evoutils.get_voxel_input(robot_shape, obs_i, sa_i, voxel_ids) for obs_i, sa_i in
-            #                         zip(obs_mat, sa_matrix)]).to(device)
-
-            #obs_mat, voxel_input = update_input(obs ,obs_mat, mass_matrix, sa_matrix, action, robot_shape, voxel_ids, n_proc, n_actuators, device)
-            voxel_input = update_input(obs, voxel_masses, sa_matrix, action, robot_shape, voxel_ids, n_proc, n_actuators, device)
+            voxel_input = mlp_agent.step(obs, action)
 
             # track rewards
             for info in infos:
@@ -211,7 +187,7 @@ def run_ppo(
             #obs_rms = utils.get_vec_normalize(envs).obs_rms
             obs_rms = None
             determ_avg_reward = evaluate(args.num_evals, actor_critic, obs_rms, args.env_name, structure, args.seed,
-                     args.num_processes, eval_log_dir, device, n_actuators)
+                     args.num_processes, eval_log_dir, device, voxel_ob_len, action_len)
 
             if verbose:
                 if saving_convention != None:

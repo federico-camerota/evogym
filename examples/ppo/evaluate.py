@@ -2,9 +2,9 @@ import numpy as np
 import torch
 from ppo import utils
 from ppo.envs import make_vec_envs
-from ppo.utils import init_input, update_input
 
 import abc_sr.evogym_utils as evoutils
+from abc_sr.agents import MLPAgent
 
 # Derived from
 # https://github.com/ikostrikov/pytorch-a2c-ppo-acktr-gail
@@ -18,7 +18,7 @@ def evaluate(
     seed,
     num_processes,
     eval_log_dir,
-    device, n_actuators):
+    device, voxel_ob_len, action_len):
 
     num_processes = min(num_processes, num_evals)
 
@@ -39,9 +39,9 @@ def evaluate(
     voxel_ids = evoutils.actuators_ids(robot_structure[0])
     n_actuators = len(voxel_ids[0])
 
-    #mass_matrix, sa_matrix, obs_mat, voxel_input = init_input(obs, robot_structure, robot_shape, voxel_ids,  n_proc, device)
-    voxel_masses, sa_matrix, voxel_input = init_input(obs, robot_structure, robot_shape, voxel_ids, n_proc, device)
+    mlp_agent = MLPAgent(robot_structure, n_proc, device, voxel_ob_len, action_len)
 
+    voxel_input = mlp_agent.init(obs)
 
     eval_recurrent_hidden_states = torch.zeros(
         num_processes*n_actuators, actor_critic.recurrent_hidden_state_size, device=device)
@@ -60,9 +60,7 @@ def evaluate(
         # Obser reward and next obs
         obs, _, done, infos = eval_envs.step(actions)
 
-        #obs_mat, voxel_input = update_input(obs, obs_mat, mass_matrix, sa_matrix, action, robot_shape, voxel_ids, n_proc, n_actuators, device)
-        voxel_input = update_input(obs, voxel_masses, sa_matrix, action, robot_shape, voxel_ids, n_proc, n_actuators,
-                                   device)
+        voxel_input = mlp_agent.step(obs, action)
 
         eval_masks = torch.tensor(
             [[0.0] if done_ else [1.0] for done_ in done],
