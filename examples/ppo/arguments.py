@@ -76,7 +76,7 @@ def get_args():
     parser.add_argument(
         '--num-processes',
         type=int,
-        default=1,
+        default=4,
         help='how many training CPU processes to use (default: 1)')
     parser.add_argument(
         '--num-steps',
@@ -116,7 +116,7 @@ def get_args():
     parser.add_argument(
         '--eval-interval',
         type=int,
-        default=None,
+        default=50,
         help='eval interval, one eval per n updates (default: None)')
     parser.add_argument(
         '--num-env-steps',
@@ -125,7 +125,7 @@ def get_args():
         help='number of environment steps to train (default: 10e6)')
     parser.add_argument(
         '--env-name',
-        default='roboticgamedesign-v0',
+        default='DistributedWalker-v0',
         help='environment to train on (default: roboticgamedesign-v0)')
     parser.add_argument(
         '--log-dir',
