@@ -13,7 +13,6 @@ old/
 dist/
 build/
 __pycache__/
-examples/saved_data
 examples/__pycache__
 examples/api_planning.txt
 evogym/__pycache__
