@@ -1,6 +1,7 @@
 import os
 import sys
 
+import gym
 import imageio
 import numpy as np
 import torch
@@ -13,6 +14,10 @@ sys.path.insert(1, os.path.join(external_dir, 'pytorch_a2c_ppo_acktr_gail'))
 
 from ppo.envs import make_vec_envs
 from ppo.utils import get_vec_normalize
+
+
+import abc_sr.envs
+from abc_sr.agents import MLPAgent
 
 
 def get_generations(load_dir, exp_name):
@@ -42,8 +47,15 @@ def save_robot_gif(out_path, env_name, body_path, ctrl_path):
         structure.append(value)
     structure = tuple(structure)
 
+    dummy_env = gym.make(env_name, body=structure[0])
     env = make_vec_envs(env_name, structure, 1000, 1, None, None, device='cpu', allow_early_resets=False)
     env.get_attr("default_viewer", indices=None)[0].set_resolution(GIF_RESOLUTION)
+
+
+    voxel_ob_len = dummy_env.observation_space.shape[0]
+    action_len = dummy_env.voxel_action_space.shape[0]
+    mlp_agent = MLPAgent((torch.from_numpy(structure[0]), torch.from_numpy(structure[1])), 1, torch.device('cpu'), voxel_ob_len, action_len)
+    n_actuators = mlp_agent._n_actuators
 
     actor_critic, obs_rms = torch.load(ctrl_path, map_location='cpu')
 
@@ -52,10 +64,11 @@ def save_robot_gif(out_path, env_name, body_path, ctrl_path):
         vec_norm.eval()
         vec_norm.obs_rms = obs_rms
 
-    recurrent_hidden_states = torch.zeros(1, actor_critic.recurrent_hidden_state_size)
-    masks = torch.zeros(1, 1)
+    recurrent_hidden_states = torch.zeros(n_actuators, actor_critic.recurrent_hidden_state_size)
+    masks = torch.zeros(n_actuators, 1)
 
     obs = env.reset()
+    voxel_input = mlp_agent.init(obs)
     done = False
 
     imgs = []
@@ -64,9 +77,13 @@ def save_robot_gif(out_path, env_name, body_path, ctrl_path):
 
         with torch.no_grad():
             value, action, _, recurrent_hidden_states = actor_critic.act(
-                obs, recurrent_hidden_states, masks, deterministic=True)
+                voxel_input, recurrent_hidden_states, masks, deterministic=True)
 
-        obs, reward, done, _ = env.step(action)
+        obs, reward, done, _ = env.step(action.reshape((1, -1)))
+
+        voxel_input = mlp_agent.step(obs, action)
+
+
         img = env.render(mode='img')
         imgs.append(img)
 
