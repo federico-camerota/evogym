@@ -30,6 +30,9 @@ def run_ppo(
     saving_convention,
     override_env_name = None,
     verbose = True):
+    struct = structure
+    structure = (structure.body, structure.connections)
+    struct_rewards = []
 
     assert (structure == None) == (termination_condition == None) and (structure == None) == (saving_convention == None)
 
@@ -171,6 +174,7 @@ def run_ppo(
         if j % args.log_interval == 0 and len(episode_rewards) > 1 and verbose:
             total_num_steps = (j + 1) * args.num_processes * args.num_steps
             end = time.time()
+            struct_rewards.append(np.mean(episode_rewards))
             print(
                 "Updates {}, num timesteps {}, FPS {} \n Last {} training episodes: mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}\n"
                     .format(j, total_num_steps,
@@ -214,7 +218,8 @@ def run_ppo(
             if termination_condition(j):
                 if verbose:
                     print(f'{saving_convention} has met termination condition ({j})...terminating...\n')
-                return max_determ_avg_reward
+                struct_rewards.append(max_determ_avg_reward)
+                return struct_rewards
 
 #python ppo_main_test.py --env-name "roboticgamedesign-v0" --algo ppo --use-gae --lr 2.5e-4 --clip-param 0.1 --value-loss-coef 0.5 --num-processes 1 --num-steps 128 --num-mini-batch 4 --log-interval 1 --use-linear-lr-decay --entropy-coef 0.01
 #python ppo.py --env-name "roboticgamedesign-v0" --algo ppo --use-gae --lr 2.5e-4 --clip-param 0.1 --value-loss-coef 0.5 --num-processes 8 --num-steps 128 --num-mini-batch 4 --log-interval 1 --use-linear-lr-decay --entropy-coef 0.01 --log-dir "logs/"

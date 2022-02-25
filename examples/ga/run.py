@@ -163,9 +163,9 @@ def run_ga(experiment_name, structure_shape, pop_size, max_evaluations, train_it
                     shutil.copy(save_path_controller_part_old, save_path_controller_part)
                 except:
                     print(f'Error coppying controller for {save_path_controller_part}.\n')
-            else:        
-                ppo_args = ((structure.body, structure.connections), tc, (save_path_controller, structure.label))
-                group.add_job(run_ppo, ppo_args, callback=structure.set_reward)
+            else:
+                ppo_args = (structure, tc, (save_path_controller, structure.label))
+                group.add_job(run_ppo, ppo_args, cache_size=int(train_iters / 10), callback=structure.set_reward)
 
         group.run_jobs(num_cores)
 
@@ -179,25 +179,18 @@ def run_ga(experiment_name, structure_shape, pop_size, max_evaluations, train_it
 
         structures = sorted(structures, key=lambda structure: structure.fitness, reverse=True)
 
-        #SAVE RANKING TO FILE
+        # SAVE FEATURES
         temp_path = os.path.join(root_dir, "saved_data", experiment_name, "generation_" + str(generation), "output.txt")
         f = open(temp_path, "w")
-
-        out = ""
+        out = "\t\t".join(["label", "fitness", "size", "width", "height", "num_rigid", "num_soft", "num_h", "num_v",
+                           "elongation", "eccentricity", "reward"]) + "\n"
         for structure in structures:
-            out += str(structure.label) + "\t\t" + str(structure.fitness) + "\n"
-        f.write(out)
-        f.close()
-
-        temp_path = os.path.join(root_dir, "saved_data", experiment_name, "generation_" + str(generation),
-                                 "features.txt")
-        f = open(temp_path, "w")
-        out = ";".join(["size", "width", "height", "num_rigid", "num_soft", "num_h", "num_v", "elongation", "eccentricity", "reward"]) + "\n"
-        out += ";".join([get_size(structures[0].body), get_width(structures[0].body), get_height(structures[0].body),
-                         get_num_voxels_type(structures[0].body, 1), get_num_voxels_type(structures[0].body, 2),
-                         get_num_voxels_type(structures[0].body, 3), get_num_voxels_type(structures[0].body, 4),
-                         get_elongation(structures[0].body), get_eccentricity(structures[0].body),
-                         "-".join([str(r) for r in structures[0].rewards])])
+            out += "\t\t".join([str(structure.label), str(structure.fitness), str(get_size(structure.body)),
+                                str(get_width(structure.body)), str(get_height(structure.body)),
+                                str(get_num_voxels_type(structure.body, 1)), str(get_num_voxels_type(structure.body, 2)),
+                                str(get_num_voxels_type(structure.body, 3)), str(get_num_voxels_type(structure.body, 4)),
+                                str(get_elongation(structure.body)), str(get_eccentricity(structure.body)),
+                                ",".join([str(r) for r in structure.rewards])]) + "\n"
         f.write(out)
         f.close()
 
