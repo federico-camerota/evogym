@@ -6,10 +6,7 @@ import math
 
 import sys
 
-from abc_sr.evogym_utils import VoxelType
-from utils.features import get_size, get_height, get_width, get_elongation, get_eccentricity
-
-from examples.utils.features import get_num_voxels_type
+from utils.features import get_size, get_height, get_width, get_elongation, get_eccentricity, get_num_voxels_type
 
 curr_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.join(curr_dir, '..')
