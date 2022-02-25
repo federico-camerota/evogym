@@ -186,6 +186,13 @@ def run_ga(experiment_name, structure_shape, pop_size, max_evaluations, train_it
         f.write(out)
         f.close()
 
+        temp_path = os.path.join(root_dir, "saved_data", experiment_name, "generation_" + str(generation),
+                                 "learning.txt")
+        f = open(temp_path, "w")
+        out = ";".join(structures[0].rewards)
+        f.write(out)
+        f.close()
+
          ### CHECK EARLY TERMINATION ###
         if num_evaluations == max_evaluations:
             print(f'Trained exactly {num_evaluations} robots')

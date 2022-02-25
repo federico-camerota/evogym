@@ -8,7 +8,7 @@ class Structure():
         self.body = body
         self.connections = connections
 
-        self.reward = 0
+        self.rewards = [0]
         self.fitness = self.compute_fitness()
         
         self.is_survivor = False
@@ -18,16 +18,16 @@ class Structure():
 
     def compute_fitness(self):
 
-        self.fitness = self.reward
+        self.fitness = self.rewards[-1]
         return self.fitness
 
     def set_reward(self, reward):
 
-        self.reward = reward
+        self.rewards.append(reward)
         self.compute_fitness()
 
     def __str__(self):
-        return f'\n\nStructure:\n{self.body}\nF: {self.fitness}\tR: {self.reward}\tID: {self.label}'
+        return f'\n\nStructure:\n{self.body}\nF: {self.fitness}\tR: {self.rewards}\tID: {self.label}'
 
     def __repr__(self):
         return self.__str__()
