@@ -5,8 +5,8 @@ import sys
 from ga.run import run_ga
 
 if __name__ == "__main__":
-    seed = int(sys.argv[1])
-    task = sys.argv[3].split("-")[0].lower()
+    seed = int(sys.argv[2])
+    task = sys.argv[4].split("-")[0].lower()
     random.seed(seed)
     np.random.seed(seed)
 
@@ -16,5 +16,5 @@ if __name__ == "__main__":
         experiment_name="-".join([task, str(seed)]),
         max_evaluations=250 if "soft" in task else 500,
         train_iters=1000,
-        num_cores=1
+        num_cores=25
     )
