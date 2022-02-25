@@ -17,3 +17,12 @@ stable-baselines3==1.4.0
 torch==1.10.2
 ttkbootstrap==1.5.1
 typing==3.7.4.3
+
+evogym~=1.0.0
+setuptools~=58.0.4
+gpyopt~=1.2.6
+scipy~=1.7.3
+shapely~=1.7.1
+scikit-image~=0.18.3
+yaml~=0.2.5
+pyyaml~=6.0
