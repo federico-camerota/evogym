@@ -65,9 +65,30 @@ def run_ppo(
 
     has_globals = dummy_env.has_globals()
 
+
+    n_proc = args.num_processes
+    obs = envs.reset()
+
+    voxel_ob_len = dummy_env.observation_space.shape[0]
+    action_len = 1
+
+    if has_globals:
+        global_obs = envs.env_method('global_obs')
+        global_obs = torch.from_numpy(np.array(global_obs)).float().to(device)
+
+        globals_len = global_obs.shape[-1]
+        mlp_agent = MLPAgentGlobals(robot_structure, n_proc, device, voxel_ob_len, action_len, globals_len)
+        voxel_input = mlp_agent.init(obs, global_obs)
+    else:
+        mlp_agent = MLPAgent(robot_structure, n_proc, device, voxel_ob_len, action_len)
+        voxel_input = mlp_agent.init(obs)
+
+
+    n_actuators = mlp_agent._n_actuators
+
     actor_critic = Policy(
-        dummy_env.voxel_observation_space.shape,
-        dummy_env.voxel_action_space,
+        mlp_agent.voxel_observation_space.shape,
+        mlp_agent.voxel_action_space,
         base_kwargs={'recurrent': args.recurrent_policy})
 
     actor_critic.to(device)
@@ -85,29 +106,9 @@ def run_ppo(
         eps=args.eps,
         max_grad_norm=args.max_grad_norm)
 
-    n_proc = args.num_processes
-    obs = envs.reset()
-
-    voxel_ob_len = dummy_env.observation_space.shape[0]
-    action_len = dummy_env.voxel_action_space.shape[0]
-
-    if has_globals:
-        global_obs = envs.env_method('global_obs')
-        global_obs = torch.from_numpy(np.array(global_obs)).float().to(device)
-
-        globals_len = global_obs.shape[-1]
-        mlp_agent = MLPAgentGlobals(robot_structure, n_proc, device, voxel_ob_len, action_len, globals_len)
-        voxel_input = mlp_agent.init(obs, global_obs)
-    else:
-        mlp_agent = MLPAgent(robot_structure, n_proc, device, voxel_ob_len, action_len)
-        voxel_input = mlp_agent.init(obs)
-
-
-    n_actuators = mlp_agent._n_actuators
-
 
     rollouts = RolloutStorage(args.num_steps, args.num_processes * n_actuators,
-                              dummy_env.voxel_observation_space.shape, dummy_env.voxel_action_space,
+                              mlp_agent.voxel_observation_space.shape, mlp_agent.voxel_action_space,
                               actor_critic.recurrent_hidden_state_size)
 
 
