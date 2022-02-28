@@ -17,7 +17,7 @@ from ppo.utils import get_vec_normalize
 
 
 import abc_sr.envs
-from abc_sr.agents import MLPAgent
+from abc_sr.agents import MLPAgent, MLPAgentGlobals
 
 
 def get_generations(load_dir, exp_name):
@@ -51,11 +51,9 @@ def save_robot_gif(out_path, env_name, body_path, ctrl_path):
     env = make_vec_envs(env_name, structure, 1000, 1, None, None, device='cpu', allow_early_resets=False)
     env.get_attr("default_viewer", indices=None)[0].set_resolution(GIF_RESOLUTION)
 
+    has_globals = dummy_env.has_globals()
 
-    voxel_ob_len = dummy_env.observation_space.shape[0]
-    action_len = dummy_env.voxel_action_space.shape[0]
-    mlp_agent = MLPAgent((torch.from_numpy(structure[0]), torch.from_numpy(structure[1])), 1, torch.device('cpu'), voxel_ob_len, action_len)
-    n_actuators = mlp_agent._n_actuators
+
 
     actor_critic, obs_rms = torch.load(ctrl_path, map_location='cpu')
 
@@ -64,12 +62,30 @@ def save_robot_gif(out_path, env_name, body_path, ctrl_path):
         vec_norm.eval()
         vec_norm.obs_rms = obs_rms
 
-    recurrent_hidden_states = torch.zeros(n_actuators, actor_critic.recurrent_hidden_state_size)
-    masks = torch.zeros(n_actuators, 1)
 
     obs = env.reset()
-    voxel_input = mlp_agent.init(obs)
     done = False
+
+    voxel_ob_len = dummy_env.observation_space.shape[0]
+    action_len = dummy_env.voxel_action_space.shape[0]
+
+    if has_globals:
+        global_obs = env.env_method('global_obs')
+        global_obs = torch.from_numpy(np.array(global_obs)).float()
+
+        global_ob_len = global_obs.shape[-1]
+        mlp_agent = MLPAgentGlobals((torch.from_numpy(structure[0]), torch.from_numpy(structure[1])), 1, torch.device('cpu'), voxel_ob_len, action_len, global_ob_len)
+        voxel_input = mlp_agent.init(obs, global_obs)
+
+    else:
+        mlp_agent = MLPAgent((torch.from_numpy(structure[0]), torch.from_numpy(structure[1])), 1, torch.device('cpu'), voxel_ob_len, action_len)
+        voxel_input = mlp_agent.init(obs)
+
+    n_actuators = mlp_agent._n_actuators
+
+
+    recurrent_hidden_states = torch.zeros(n_actuators, actor_critic.recurrent_hidden_state_size)
+    masks = torch.zeros(n_actuators, 1)
 
     imgs = []
     # arrays = []
@@ -81,7 +97,13 @@ def save_robot_gif(out_path, env_name, body_path, ctrl_path):
 
         obs, reward, done, _ = env.step(action.reshape((1, -1)))
 
-        voxel_input = mlp_agent.step(obs, action)
+        if has_globals:
+            global_obs = env.env_method('global_obs')
+            global_obs = torch.from_numpy(np.array(global_obs)).float()
+
+            voxel_input = mlp_agent.step(obs, global_obs, action)
+        else:
+            voxel_input = mlp_agent.step(obs, action)
 
 
         img = env.render(mode='img')
@@ -153,7 +175,7 @@ class Job:
         self.generations = generations
         self.ranks = ranks
 
-        # set jobs 
+        # set jobs
         self.sub_jobs = []
         if jobs:
             for job in jobs:
@@ -249,7 +271,7 @@ class Job:
         # multiprocessing is currently broken
 
         # group = mp.Group()
-        # for i, robot in zip(ranks, robots):              
+        # for i, robot in zip(ranks, robots):
         #     gif_args = (
         #         os.path.join(save_dir, f'{i}_{robot}'),
         #         robot.env_name,
@@ -267,8 +289,8 @@ if __name__ == '__main__':
     save_dir = os.path.join(root_dir, 'saved_data', 'all_media')
 
     my_job = Job(
-        name='flat',
-        experiment_names=['flat'],
+        name='walk_test',
+        experiment_names=['walk_test'],
         env_names=['DistributedWalker-v0'],
         ranks=[i for i in range(3)],
         load_dir=exp_root,

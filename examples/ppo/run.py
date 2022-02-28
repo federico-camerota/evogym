@@ -18,7 +18,7 @@ from a2c_ppo_acktr.storage import RolloutStorage
 
 import gym
 
-from abc_sr.agents import MLPAgent
+from abc_sr.agents import MLPAgent, MLPAgentGlobals
 import abc_sr.envs
 
 # Derived from
@@ -63,6 +63,8 @@ def run_ppo(
     envs = make_vec_envs(args.env_name, structure, args.seed, args.num_processes,
                          args.gamma, args.log_dir, device, False)
 
+    has_globals = dummy_env.has_globals()
+
     actor_critic = Policy(
         dummy_env.voxel_observation_space.shape,
         dummy_env.voxel_action_space,
@@ -88,11 +90,21 @@ def run_ppo(
 
     voxel_ob_len = dummy_env.observation_space.shape[0]
     action_len = dummy_env.voxel_action_space.shape[0]
-    mlp_agent = MLPAgent(robot_structure, n_proc, device, voxel_ob_len, action_len)
+
+    if has_globals:
+        global_obs = envs.env_method('global_obs')
+        global_obs = torch.from_numpy(np.array(global_obs)).float().to(device)
+
+        globals_len = global_obs.shape[-1]
+        mlp_agent = MLPAgentGlobals(robot_structure, n_proc, device, voxel_ob_len, action_len, globals_len)
+        voxel_input = mlp_agent.init(obs, global_obs)
+    else:
+        mlp_agent = MLPAgent(robot_structure, n_proc, device, voxel_ob_len, action_len)
+        voxel_input = mlp_agent.init(obs)
+
 
     n_actuators = mlp_agent._n_actuators
 
-    voxel_input = mlp_agent.init(obs)
 
     rollouts = RolloutStorage(args.num_steps, args.num_processes * n_actuators,
                               dummy_env.voxel_observation_space.shape, dummy_env.voxel_action_space,
@@ -135,7 +147,13 @@ def run_ppo(
 
             reward = reward.repeat(1, n_actuators).reshape((-1, 1)).to(device)
 
-            voxel_input = mlp_agent.step(obs, action)
+            if has_globals:
+                global_obs = envs.env_method('global_obs')
+                global_obs = torch.from_numpy(np.array(global_obs)).float().to(device)
+
+                voxel_input = mlp_agent.step(obs, global_obs, action)
+            else:
+                voxel_input = mlp_agent.step(obs, action)
 
             # track rewards
             for info in infos:
@@ -187,7 +205,7 @@ def run_ppo(
             #obs_rms = utils.get_vec_normalize(envs).obs_rms
             obs_rms = None
             determ_avg_reward = evaluate(args.num_evals, actor_critic, obs_rms, args.env_name, structure, args.seed,
-                     args.num_processes, eval_log_dir, device, voxel_ob_len, action_len)
+                     args.num_processes, eval_log_dir, device, voxel_ob_len, action_len, has_globals)
 
             if verbose:
                 if saving_convention != None:
