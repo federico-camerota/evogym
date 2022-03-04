@@ -56,6 +56,7 @@ def run_ppo(
     torch.set_num_threads(1)
     device = torch.device("cuda:0" if args.cuda else "cpu")
     #device = torch.device("cpu")
+    #torch.cuda.synchronize()
 
     robot_structure = (torch.from_numpy(structure[0]), torch.from_numpy(structure[1]))
 
@@ -92,8 +93,6 @@ def run_ppo(
         base_kwargs={'recurrent': args.recurrent_policy})
 
     actor_critic.to(device)
-    #torch.cuda.synchronize()
-    #print("Done ac.cuda()")
 
     agent = algo.PPO(
         actor_critic,
