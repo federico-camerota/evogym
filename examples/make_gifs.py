@@ -67,7 +67,7 @@ def save_robot_gif(out_path, env_name, body_path, ctrl_path):
     done = False
 
     voxel_ob_len = dummy_env.observation_space.shape[0]
-    action_len = dummy_env.voxel_action_space.shape[0]
+    action_len = 1
 
     if has_globals:
         global_obs = env.env_method('global_obs')
@@ -291,7 +291,7 @@ if __name__ == '__main__':
     my_job = Job(
         name='walk_test',
         experiment_names=['walk_test'],
-        env_names=['DistributedWalker-v0'],
+        env_names=['DistributedTraverser-v0'],
         ranks=[i for i in range(3)],
         load_dir=exp_root,
         organize_by_experiment=False,
