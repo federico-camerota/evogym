@@ -14,10 +14,10 @@ if __name__ == "__main__":
     np.random.seed(seed)
 
     run_ga(
-        pop_size=1,
+        pop_size=25,
         structure_shape=get_robot_shape(env),
         experiment_name="-".join([task, str(seed)]),
         max_evaluations=get_number_evaluations(env),
-        train_iters=100,
-        num_cores=1
+        train_iters=1000,
+        num_cores=25
     )
