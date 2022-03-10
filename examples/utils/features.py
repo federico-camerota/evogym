@@ -1,7 +1,4 @@
 import numpy as np
-from scipy.spatial import ConvexHull
-from shapely.geometry import Point
-from shapely.geometry.polygon import Polygon
 from skimage.measure import regionprops_table
 from skimage.measure import label as label_skimage
 
