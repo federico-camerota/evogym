@@ -1,6 +1,6 @@
+import math
+
 import numpy as np
-from skimage.measure import regionprops_table
-from skimage.measure import label as label_skimage
 
 
 def get_size(body):
@@ -32,8 +32,19 @@ def get_height(body):
 
 
 def get_elongation(body):
-    body2 = np.array([[1 if body[x, y] != 0 else 0 for y in range(body.shape[1])] for x in range(body.shape[0])])
-    return regionprops_table(label_skimage(body2), properties=("centroid", "orientation", "eccentricity"))["eccentricity"][0]
+    coordinates = list(filter(lambda x: body[x[0], x[1]] != 0, [(x, y) for x in range(body.shape[0]) for y in range(body.shape[1])]))
+    diameters = []
+    for i in range(8):
+        theta = (2 * i * math.pi) / 8
+        rotated = [(x * math.cos(theta) - y * math.sin(theta), x * math.sin(theta) + y * math.cos(theta))
+                   for x, y in coordinates]
+        min_x, max_x, min_y, max_y = min(rotated, key=lambda x: x[0])[0], max(rotated, key=lambda x: x[0])[0], \
+                                     min(rotated, key=lambda x: x[1])[1], max(rotated, key=lambda x: x[1])[1]
+        side_x = max_x - min_x + 1
+        side_y = max_y - min_y + 1
+        diameters.append(min(side_y, side_x) / max(side_y, side_x))
+    print(diameters)
+    return 1.0 - min(diameters)
 
 
 def get_eccentricity(body):
@@ -46,7 +57,8 @@ def get_eccentricity(body):
                 if body2[x, y] == 0 and sum([c == 1 for c in get_neighborhood(body2, x, y)]) >= 3:
                     body2[x, y] = 1
                     stop = False
-    return np.count_nonzero(np.array([[1 if body[x, y] != 0 else 0 for y in range(body.shape[1])] for x in range(body.shape[0])])) / np.count_nonzero(body2)
+    return np.count_nonzero(np.array([[1 if body[x, y] != 0 else 0 for y in range(body.shape[1])]
+                                      for x in range(body.shape[0])])) / np.count_nonzero(body2)
 
 
 def get_neighborhood(body, x, y):
