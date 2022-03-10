@@ -1,4 +1,5 @@
 import os, sys
+
 sys.path.insert(1, os.path.join(sys.path[0], 'externals', 'pytorch_a2c_ppo_acktr_gail'))
 
 import numpy as np
@@ -16,28 +17,23 @@ from a2c_ppo_acktr.algo import gail
 from a2c_ppo_acktr.model import Policy
 from a2c_ppo_acktr.storage import RolloutStorage
 
-import gym
+import evogym.envs
 
-from abc_sr.agents import MLPAgent
-import abc_sr.envs
 
 # Derived from
 # https://github.com/ikostrikov/pytorch-a2c-ppo-acktr-gail
 
 def run_ppo(
-    structure,
-    termination_condition,
-    saving_convention,
-    override_env_name = None,
-    verbose = True):
-    struct = structure
+        structure,
+        termination_condition,
+        saving_convention,
+        override_env_name=None,
+        verbose=True):
     structure = (structure.body, structure.connections)
-    struct_rewards = []
-
-    assert (structure == None) == (termination_condition == None) and (structure == None) == (saving_convention == None)
+    assert (structure is None) == (termination_condition is None) and (structure is None) == (saving_convention is None)
 
     print(f'Starting training on \n{structure}\nat {saving_convention}...\n')
-
+    struct_rewards = []
     args = get_args()
     if override_env_name:
         args.env_name = override_env_name
@@ -50,7 +46,7 @@ def run_ppo(
         torch.backends.cudnn.deterministic = True
 
     log_dir = args.log_dir
-    if saving_convention != None:
+    if saving_convention is not None:
         log_dir = os.path.join(saving_convention[0], log_dir, "robot_" + str(saving_convention[1]))
     eval_log_dir = log_dir + "_eval"
     utils.cleanup_log_dir(log_dir)
@@ -58,51 +54,66 @@ def run_ppo(
 
     torch.set_num_threads(1)
     device = torch.device("cuda:0" if args.cuda else "cpu")
-    #device = torch.device("cpu")
 
-    robot_structure = (torch.from_numpy(structure[0]), torch.from_numpy(structure[1]))
-
-    dummy_env = gym.make(args.env_name, body=structure[0])
     envs = make_vec_envs(args.env_name, structure, args.seed, args.num_processes,
                          args.gamma, args.log_dir, device, False)
 
     actor_critic = Policy(
-        dummy_env.voxel_observation_space.shape,
-        dummy_env.voxel_action_space,
+        envs.observation_space.shape,
+        envs.action_space,
         base_kwargs={'recurrent': args.recurrent_policy})
-
     actor_critic.to(device)
-    #torch.cuda.synchronize()
-    #print("Done ac.cuda()")
 
-    agent = algo.PPO(
-        actor_critic,
-        args.clip_param,
-        args.ppo_epoch,
-        args.num_mini_batch,
-        args.value_loss_coef,
-        args.entropy_coef,
-        lr=args.lr,
-        eps=args.eps,
-        max_grad_norm=args.max_grad_norm)
+    if args.algo == 'a2c':
+        print('Warning: this code has only been tested with ppo.')
+        agent = algo.A2C_ACKTR(
+            actor_critic,
+            args.value_loss_coef,
+            args.entropy_coef,
+            lr=args.lr,
+            eps=args.eps,
+            alpha=args.alpha,
+            max_grad_norm=args.max_grad_norm)
+    elif args.algo == 'ppo':
+        agent = algo.PPO(
+            actor_critic,
+            args.clip_param,
+            args.ppo_epoch,
+            args.num_mini_batch,
+            args.value_loss_coef,
+            args.entropy_coef,
+            lr=args.lr,
+            eps=args.eps,
+            max_grad_norm=args.max_grad_norm)
+    elif args.algo == 'acktr':
+        print('Warning: this code has only been tested with ppo.')
+        agent = algo.A2C_ACKTR(
+            actor_critic, args.value_loss_coef, args.entropy_coef, acktr=True)
 
-    n_proc = args.num_processes
-    obs = envs.reset()
+    if args.gail:
+        assert len(envs.observation_space.shape) == 1
+        discr = gail.Discriminator(
+            envs.observation_space.shape[0] + envs.action_space.shape[0], 100,
+            device)
+        file_name = os.path.join(
+            args.gail_experts_dir, "trajs_{}.pt".format(
+                args.env_name.split('-')[0].lower()))
 
-    voxel_ob_len = dummy_env.observation_space.shape[0]
-    action_len = dummy_env.voxel_action_space.shape[0]
-    mlp_agent = MLPAgent(robot_structure, n_proc, device, voxel_ob_len, action_len)
+        expert_dataset = gail.ExpertDataset(
+            file_name, num_trajectories=4, subsample_frequency=20)
+        drop_last = len(expert_dataset) > args.gail_batch_size
+        gail_train_loader = torch.utils.data.DataLoader(
+            dataset=expert_dataset,
+            batch_size=args.gail_batch_size,
+            shuffle=True,
+            drop_last=drop_last)
 
-    n_actuators = mlp_agent._n_actuators
-
-    voxel_input = mlp_agent.init(obs)
-
-    rollouts = RolloutStorage(args.num_steps, args.num_processes * n_actuators,
-                              dummy_env.voxel_observation_space.shape, dummy_env.voxel_action_space,
+    rollouts = RolloutStorage(args.num_steps, args.num_processes,
+                              envs.observation_space.shape, envs.action_space,
                               actor_critic.recurrent_hidden_state_size)
 
-
-    rollouts.obs[0].copy_(voxel_input)
+    obs = envs.reset()
+    rollouts.obs[0].copy_(obs)
     rollouts.to(device)
 
     episode_rewards = deque(maxlen=10)
@@ -113,7 +124,6 @@ def run_ppo(
 
     rewards_tracker = []
     avg_rewards_tracker = []
-    sliding_window_size = 10
     max_determ_avg_reward = float('-inf')
 
     for j in range(num_updates):
@@ -131,14 +141,8 @@ def run_ppo(
                     rollouts.obs[step], rollouts.recurrent_hidden_states[step],
                     rollouts.masks[step])
 
-            actions = action.reshape((n_proc, -1)).to(device)
-
             # Obser reward and next obs
-            obs, reward, done, infos = envs.step(actions)
-
-            reward = reward.repeat(1, n_actuators).reshape((-1, 1)).to(device)
-
-            voxel_input = mlp_agent.step(obs, action)
+            obs, reward, done, infos = envs.step(action)
 
             # track rewards
             for info in infos:
@@ -151,17 +155,34 @@ def run_ppo(
                         avg_rewards_tracker.append(np.average(np.array(rewards_tracker[-10:])))
 
             # If done then clean the history of observations.
-            masks = torch.FloatTensor( [[0.0] if done_ else [1.0] for done_ in done]).repeat(1,n_actuators).reshape((-1, 1)).to(device)
+            masks = torch.FloatTensor(
+                [[0.0] if done_ else [1.0] for done_ in done])
             bad_masks = torch.FloatTensor(
                 [[0.0] if 'bad_transition' in info.keys() else [1.0]
-                 for info in infos]).repeat(1,n_actuators).reshape((-1, 1)).to(device)
-
-            rollouts.insert(voxel_input, recurrent_hidden_states.to(device), action, action_log_prob, value, reward, masks, bad_masks)
+                 for info in infos])
+            rollouts.insert(obs, recurrent_hidden_states, action,
+                            action_log_prob, value, reward, masks, bad_masks)
 
         with torch.no_grad():
             next_value = actor_critic.get_value(
                 rollouts.obs[-1], rollouts.recurrent_hidden_states[-1],
                 rollouts.masks[-1]).detach()
+
+        if args.gail:
+            if j >= 10:
+                envs.venv.eval()
+
+            gail_epoch = args.gail_epoch
+            if j < 10:
+                gail_epoch = 100  # Warm up
+            for _ in range(gail_epoch):
+                discr.update(gail_train_loader, rollouts,
+                             utils.get_vec_normalize(envs)._obfilt)
+
+            for step in range(args.num_steps):
+                rollouts.rewards[step] = discr.predict_reward(
+                    rollouts.obs[step], rollouts.actions[step], args.gamma,
+                    rollouts.masks[step])
 
         rollouts.compute_returns(next_value, args.use_gae, args.gamma,
                                  args.gae_lambda, args.use_proper_time_limits)
@@ -176,7 +197,8 @@ def run_ppo(
             end = time.time()
             struct_rewards.append(np.mean(episode_rewards))
             print(
-                "Updates {}, num timesteps {}, FPS {} \n Last {} training episodes: mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}\n"
+                "Updates {}, num timesteps {}, FPS {} \n Last {} training episodes: mean/median reward {:.1f}/{:.1f}, "
+                "min/max reward {:.1f}/{:.1f}\n "
                     .format(j, total_num_steps,
                             int(total_num_steps / (end - start)),
                             len(episode_rewards), np.mean(episode_rewards),
@@ -188,14 +210,14 @@ def run_ppo(
         if (args.eval_interval is not None and len(episode_rewards) > 1
                 and j % args.eval_interval == 0):
 
-            #obs_rms = utils.get_vec_normalize(envs).obs_rms
-            obs_rms = None
+            obs_rms = utils.get_vec_normalize(envs).obs_rms
             determ_avg_reward = evaluate(args.num_evals, actor_critic, obs_rms, args.env_name, structure, args.seed,
-                     args.num_processes, eval_log_dir, device, voxel_ob_len, action_len)
+                                         args.num_processes, eval_log_dir, device)
 
             if verbose:
-                if saving_convention != None:
-                    print(f'Evaluated {saving_convention[1]} using {args.num_evals} episodes. Mean reward: {np.mean(determ_avg_reward)}\n')
+                if saving_convention is not None:
+                    print(
+                        f'Evaluated {saving_convention[1]} using {args.num_evals} episodes. Mean reward: {np.mean(determ_avg_reward)}\n')
                 else:
                     print(f'Evaluated using {args.num_evals} episodes. Mean reward: {np.mean(determ_avg_reward)}\n')
 
@@ -203,8 +225,9 @@ def run_ppo(
                 max_determ_avg_reward = determ_avg_reward
 
                 temp_path = os.path.join(args.save_dir, args.algo, args.env_name + ".pt")
-                if saving_convention != None:
-                    temp_path = os.path.join(saving_convention[0], "robot_" + str(saving_convention[1]) + "_controller" + ".pt")
+                if saving_convention is not None:
+                    temp_path = os.path.join(saving_convention[0],
+                                             "robot_" + str(saving_convention[1]) + "_controller" + ".pt")
 
                 if verbose:
                     print(f'Saving {temp_path} with avg reward {max_determ_avg_reward}\n')
@@ -214,12 +237,9 @@ def run_ppo(
                 ], temp_path)
 
         # return upon reaching the termination condition
-        if not termination_condition == None:
+        if not termination_condition is None:
             if termination_condition(j):
                 if verbose:
                     print(f'{saving_convention} has met termination condition ({j})...terminating...\n')
                 struct_rewards.append(max_determ_avg_reward)
                 return struct_rewards
-
-#python ppo_main_test.py --env-name "roboticgamedesign-v0" --algo ppo --use-gae --lr 2.5e-4 --clip-param 0.1 --value-loss-coef 0.5 --num-processes 1 --num-steps 128 --num-mini-batch 4 --log-interval 1 --use-linear-lr-decay --entropy-coef 0.01
-#python ppo.py --env-name "roboticgamedesign-v0" --algo ppo --use-gae --lr 2.5e-4 --clip-param 0.1 --value-loss-coef 0.5 --num-processes 8 --num-steps 128 --num-mini-batch 4 --log-interval 1 --use-linear-lr-decay --entropy-coef 0.01 --log-dir "logs/"

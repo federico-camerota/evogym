@@ -98,11 +98,11 @@ def make_vec_envs(env_name,
     else:
         envs = DummyVecEnv(envs)
 
-    #if len(envs.observation_space.shape) == 1:
-    #    if gamma is None:
-    #        envs = VecNormalize(envs, norm_reward=False)
-    #    else:
-    #        envs = VecNormalize(envs, gamma=gamma)
+    if len(envs.observation_space.shape) == 1:
+        if gamma is None:
+            envs = VecNormalize(envs, norm_reward=False)
+        else:
+            envs = VecNormalize(envs, gamma=gamma)
 
     envs = VecPyTorch(envs, device)
 
@@ -144,11 +144,13 @@ class TransposeObs(gym.ObservationWrapper):
 
 
 class TransposeImage(TransposeObs):
-    def __init__(self, env=None, op=[2, 0, 1]):
+    def __init__(self, env=None, op=None):
         """
         Transpose observation space for images
         """
         super(TransposeImage, self).__init__(env)
+        if op is None:
+            op = [2, 0, 1]
         assert len(op) == 3, "Error: Operation, " + str(op) + ", must be dim3"
         self.op = op
         obs_shape = self.observation_space.shape

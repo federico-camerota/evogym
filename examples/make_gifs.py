@@ -1,7 +1,6 @@
 import os
 import sys
 
-import gym
 import imageio
 import numpy as np
 import torch
@@ -14,10 +13,6 @@ sys.path.insert(1, os.path.join(external_dir, 'pytorch_a2c_ppo_acktr_gail'))
 
 from ppo.envs import make_vec_envs
 from ppo.utils import get_vec_normalize
-
-
-import abc_sr.envs
-from abc_sr.agents import MLPAgent
 
 
 def get_generations(load_dir, exp_name):
@@ -47,15 +42,8 @@ def save_robot_gif(out_path, env_name, body_path, ctrl_path):
         structure.append(value)
     structure = tuple(structure)
 
-    dummy_env = gym.make(env_name, body=structure[0])
     env = make_vec_envs(env_name, structure, 1000, 1, None, None, device='cpu', allow_early_resets=False)
     env.get_attr("default_viewer", indices=None)[0].set_resolution(GIF_RESOLUTION)
-
-
-    voxel_ob_len = dummy_env.observation_space.shape[0]
-    action_len = dummy_env.voxel_action_space.shape[0]
-    mlp_agent = MLPAgent((torch.from_numpy(structure[0]), torch.from_numpy(structure[1])), 1, torch.device('cpu'), voxel_ob_len, action_len)
-    n_actuators = mlp_agent._n_actuators
 
     actor_critic, obs_rms = torch.load(ctrl_path, map_location='cpu')
 
@@ -64,11 +52,12 @@ def save_robot_gif(out_path, env_name, body_path, ctrl_path):
         vec_norm.eval()
         vec_norm.obs_rms = obs_rms
 
-    recurrent_hidden_states = torch.zeros(n_actuators, actor_critic.recurrent_hidden_state_size)
-    masks = torch.zeros(n_actuators, 1)
+    recurrent_hidden_states = torch.zeros(1, actor_critic.recurrent_hidden_state_size)
+    masks = torch.zeros(1, 1)
 
     obs = env.reset()
-    voxel_input = mlp_agent.init(obs)
+    img = env.render(mode='img')
+    reward = None
     done = False
 
     imgs = []
@@ -77,19 +66,15 @@ def save_robot_gif(out_path, env_name, body_path, ctrl_path):
 
         with torch.no_grad():
             value, action, _, recurrent_hidden_states = actor_critic.act(
-                voxel_input, recurrent_hidden_states, masks, deterministic=True)
+                obs, recurrent_hidden_states, masks, deterministic=True)
 
-        obs, reward, done, _ = env.step(action.reshape((1, -1)))
-
-        voxel_input = mlp_agent.step(obs, action)
-
-
+        obs, reward, done, _ = env.step(action)
         img = env.render(mode='img')
         imgs.append(img)
 
-        masks.fill_(0.0 if done else 1.0)
+        masks.fill_(0.0 if (done) else 1.0)
 
-        if done:
+        if done == True:
             env.reset()
 
     env.close()
@@ -103,7 +88,7 @@ def save_robot_gif(out_path, env_name, body_path, ctrl_path):
     return 0
 
 
-class Robot:
+class Robot():
     def __init__(
             self,
             body_path=None,
@@ -131,7 +116,7 @@ class Robot:
         return out[:-1]
 
 
-class Job:
+class Job():
     def __init__(
             self,
             name,
@@ -177,10 +162,9 @@ class Job:
             self.ranks = None
         elif organize_by_generation:
             assert len(self.experiment_names) == 1, (
-                'Cannot create generation level folders for multiple experiments. Quick fix: set '
-                'organize_by_experiment=True. '
+                'Cannot create generation level folders for multiple experiments. Quick fix: set organize_by_experiment=True.'
             )
-            if self.generations is None:
+            if self.generations == None:
                 exp_name = self.experiment_names[0]
                 self.generations = get_generations(self.load_dir, exp_name)
             for gen in self.generations:
@@ -215,7 +199,7 @@ class Job:
             sub_job.generate(load_dir, save_dir, depth + 1)
 
         # collect robots
-        if self.experiment_names is None:
+        if self.experiment_names == None:
             return
 
         robots = []
@@ -267,9 +251,9 @@ if __name__ == '__main__':
     save_dir = os.path.join(root_dir, 'saved_data', 'all_media')
 
     my_job = Job(
-        name='flat',
-        experiment_names=['flat'],
-        env_names=['DistributedWalker-v0'],
+        name='test_ga',
+        experiment_names=['test_ga'],
+        env_names=['Walker-v0'],
         ranks=[i for i in range(3)],
         load_dir=exp_root,
         organize_by_experiment=False,

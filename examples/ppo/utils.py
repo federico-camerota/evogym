@@ -1,11 +1,11 @@
 import glob
 import os
-import abc_sr.evogym_utils as evoutils
 
 import torch
 import torch.nn as nn
 
 from ppo.envs import VecNormalize
+
 
 # Derived from
 # https://github.com/ikostrikov/pytorch-a2c-ppo-acktr-gail
@@ -60,7 +60,6 @@ def init(module, weight_init, bias_init, gain=1):
 
 
 def cleanup_log_dir(log_dir):
-
     try:
         os.makedirs(log_dir)
     except:

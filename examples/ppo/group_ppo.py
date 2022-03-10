@@ -5,6 +5,7 @@ import random
 
 import sys
 import os
+
 curr_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.join(curr_dir, '..')
 external_dir = os.path.join(root_dir, 'externals')
@@ -18,6 +19,7 @@ from utils.algo_utils import *
 
 from evogym import WorldObject
 
+
 class SimJob():
 
     def __init__(self, name, robots, envs, train_iters):
@@ -26,19 +28,22 @@ class SimJob():
         self.envs = envs
         self.train_iters = train_iters
 
-    def get_data(self,):
+    def get_data(self, ):
         return {'robots': self.robots, 'envs': self.envs, 'train_iters': self.train_iters}
 
-class RunData():
+
+class RunData:
 
     def __init__(self, robot, env, job_name):
         self.robot = robot
         self.env = env
         self.job_name = job_name
         self.reward = 0
+
     def set_reward(self, reward):
         print(f'setting reward for {self.robot} in {self.env}... {reward}')
         self.reward = reward
+
 
 def read_robot_from_file(file_name):
     global root_dir
@@ -59,7 +64,7 @@ def read_robot_from_file(file_name):
 
     if best_path.endswith('json'):
         robot_object = WorldObject.from_json(best_path)
-        return (robot_object.get_structure(), robot_object.get_connections())
+        return robot_object.get_structure(), robot_object.get_connections()
     if best_path.endswith('npz'):
         structure_data = np.load(best_path)
         structure = []
@@ -68,17 +73,18 @@ def read_robot_from_file(file_name):
         return tuple(structure)
     return None
 
+
 def clean_name(name):
     while name.find('/') != -1:
-        name = name[name.find('/')+1:]
+        name = name[name.find('/') + 1:]
     while name.find('\\') != -1:
-        name = name[name.find('\\')+1:]
+        name = name[name.find('\\') + 1:]
     while name.find('.') != -1:
         name = name[:name.find('.')]
     return name
 
-def run_group_ppo(experiment_name, sim_jobs): 
 
+def run_group_ppo(experiment_name, sim_jobs):
     ### STARTUP: MANAGE DIRECTORIES ###
     exp_path = os.path.join(root_dir, "saved_data", experiment_name)
     try:
@@ -119,16 +125,18 @@ def run_group_ppo(experiment_name, sim_jobs):
         count = 0
         for env_name in job.envs:
             out[job.name][env_name] = {}
-            for robot_name in job.robots: 
+            for robot_name in job.robots:
                 out[job.name][env_name][robot_name] = 0
-                
+
                 run_data.append(RunData(robot_name, env_name, job.name))
                 structure = read_robot_from_file(robot_name)
-                
+
                 temp_path = os.path.join(save_path_structure, f'{clean_name(robot_name)}_{env_name}.npz')
                 np.savez(temp_path, structure[0], structure[1])
 
-                ppo_args = ((structure[0], structure[1]), tc, (save_path_controller, f'{clean_name(robot_name)}_{env_name}'), env_name, True)
+                ppo_args = (
+                (structure[0], structure[1]), tc, (save_path_controller, f'{clean_name(robot_name)}_{env_name}'),
+                env_name, True)
                 group.add_job(run_ppo, ppo_args, callback=run_data[-1].set_reward)
     group.run_jobs(2)
 
