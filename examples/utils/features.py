@@ -39,21 +39,27 @@ def get_elongation(body):
     return regionprops_table(label_skimage(body2), properties=("centroid", "orientation", "eccentricity"))["eccentricity"][0]
 
 
-def get_eccentricity(body, eps=1e-15):
-    coords = []
-    for x in range(body.shape[0]):
-        for y in range(body.shape[1]):
-            if body[x, y] != 0:
-                coords.append((x, y))
-    points = np.array([[x, y] for x, y in coords])
-    try:
-        hull = ConvexHull(points)
-    except:
-        return 1.0
-    polygon = Polygon(points[hull.vertices])
-    hull_mask = np.zeros(body.shape)
-    for x in range(body.shape[0]):
-        for y in range(body.shape[1]):
-            if Point(x, y).distance(polygon) < eps:
-                hull_mask[x, y] = 1
-    return np.count_nonzero(body) / np.sum(hull_mask)
+def get_eccentricity(body):
+    body2 = np.array([[1 if body[x, y] != 0 else 0 for y in range(body.shape[1])] for x in range(body.shape[0])])
+    stop = False
+    while not stop:
+        stop = True
+        for x in range(body2.shape[0]):
+            for y in range(body2.shape[1]):
+                if body2[x, y] == 0 and sum([c == 1 for c in get_neighborhood(body2, x, y)]) >= 3:
+                    body2[x, y] = 1
+                    stop = False
+    return np.count_nonzero(np.array([[1 if body[x, y] != 0 else 0 for y in range(body.shape[1])] for x in range(body.shape[0])])) / np.count_nonzero(body2)
+
+
+def get_neighborhood(body, x, y):
+    out = []
+    if x < body.shape[0] - 1:
+        out.append(body[x + 1, y])
+    if x > 0:
+        out.append(body[x - 1, y])
+    if y > 0:
+        out.append(body[x, y - 1])
+    if y < body.shape[1] - 1:
+        out.append(body[x, y + 1])
+    return out
