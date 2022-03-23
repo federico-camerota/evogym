@@ -16,8 +16,12 @@ from evogym import sample_robot, hashable
 import utils.mp_group as mp
 from utils.algo_utils import get_percent_survival_evals, mutate, TerminationCondition, Structure
 
-def compute_ranks(structures, cluster_idxs, cluster_centers):
-    reprs = [cluster_idxs[c][np.argmin(np.linalg.norm(structures[cluster_idxs[c]] - cluster_centers[c]))] for c in range(len(cluster_centers))]
+from sklearn.cluster import KMeans
+
+def compute_ranks(structures, shape_features, cluster_idxs, cluster_centers):
+    dists = [np.linalg.norm(shape_features[cluster_idxs[c]] - cluster_centers[c]) for c in range(len(cluster_centers))]
+    reprs_idxs = [np.argmin(d) for d in dists]
+    reprs = [c_idxs[r] for c_idxs, r in zip(cluster_idxs, reprs_idxs)]
     fitness = np.array([structures[r].fitness for r in reprs])
     fit_ranks = np.argsort(fitness)
     idxs = np.arange(len(fit_ranks))
@@ -173,11 +177,6 @@ def run_se(experiment_name, structure_shape, pop_size, max_evaluations, train_it
 
         group.run_jobs(num_cores)
 
-        #not parallel
-        #for structure in structures:
-        #    ppo.run_algo(structure=(structure.body, structure.connections), termination_condition=termination_condition, saving_convention=(save_path_controller, structure.label))
-
-
         ### COMPUTE FITNESS, SORT, AND SAVE ###
         for structure in structures:
             structure.compute_fitness()
@@ -195,7 +194,7 @@ def run_se(experiment_name, structure_shape, pop_size, max_evaluations, train_it
         f.close()
 
          ### CHECK EARLY TERMINATION ###
-        if num_evaluations == max_evaluations:
+        if generation == max_evaluations:
             print(f'Trained exactly {num_evaluations} robots')
             return
 
@@ -207,29 +206,28 @@ def run_se(experiment_name, structure_shape, pop_size, max_evaluations, train_it
         n_elite = 5
 
         shape_features = np.array([s.body.flatten() for s in structures]) / 4
-        kmeans = KMeans(clusters=n_clusters)
+        kmeans = KMeans(n_clusters=n_clusters)
 
         cluster_labels = kmeans.fit_predict(shape_features)
         cluster_centers = kmeans.cluster_centers_
-        cluster_idxs = [np.where(cluster_labels == c) for c in range(n_clusters)]
+        cluster_idxs = [np.where(cluster_labels == c)[0].astype(int) for c in range(n_clusters)]
 
         ### CROSSOVER AND MUTATION ###
         # Save best structure and best for every cluster
         survivors = structures[:1]
         survivors += [structures[ids[0]] for ids in cluster_idxs if len(ids) > n_elite]
+        for i, s in enumerate(survivors):
+            s.is_survivor = True
+            s.prev_gen_label = s.label
+            s.label = i
+
+
         n_children = pop_size - len(survivors)
 
         alpha = 0.75
-        ranks = compute_ranks(structures, cluster_idxs, cluster_centers)
+        ranks = compute_ranks(structures, shape_features, cluster_idxs, cluster_centers)
         n_k = sum([alpha ** r for r in ranks])
         n_k = [n_children * (alpha ** r) / n_k for r in ranks]
-
-
-        #store survivior information to prevent retraining robots
-        #for i in range(num_survivors):
-        #    structures[i].is_survivor = True
-        #    structures[i].prev_gen_label = structures[i].label
-        #    structures[i].label = i
 
         # Produce children with mutations
         for i in range(n_clusters):
@@ -239,7 +237,9 @@ def run_se(experiment_name, structure_shape, pop_size, max_evaluations, train_it
                 child = mutate(structures[idx].body.copy(), mutation_rate = 0.1, num_attempts=50)
 
                 if child != None and hashable(child[0]) not in population_structure_hashes:
-                    survivors.append(Structure(*child, len(survivors + 1))
+                    population_structure_hashes[hashable(child[0])] = True
+                    num_evaluations += 1
+                    survivors.append(Structure(*child, len(survivors)))
                     c += 1
 
         structures = survivors
