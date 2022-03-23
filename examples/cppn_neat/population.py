@@ -45,7 +45,7 @@ class Population(neat.Population):
                                                                   self.config.genome_config,
                                                                   self.config.pop_size - len(valid_genomes))
                     new_genomes = list(new_population.items())
-                    validity = constraint_function(new_genomes, self.config, self.generation)
+                    validity = constraint_function(new_genomes, self.config)
                     valid_idx = np.where(validity)[0]
                     valid_genomes = np.vstack([valid_genomes, np.array(new_genomes)[valid_idx]])
 
