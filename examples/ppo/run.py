@@ -1,5 +1,7 @@
 import os, sys
 
+from utils.algo_utils import Structure
+
 sys.path.insert(1, os.path.join(sys.path[0], 'externals', 'pytorch_a2c_ppo_acktr_gail'))
 
 import numpy as np
@@ -29,7 +31,9 @@ def run_ppo(
         saving_convention,
         override_env_name=None,
         verbose=True):
-    structure = (structure.body, structure.connections)
+    is_direct = isinstance(structure, Structure)
+    if is_direct:
+        structure = (structure.body, structure.connections)
     assert (structure is None) == (termination_condition is None) and (structure is None) == (saving_convention is None)
 
     print(f'Starting training on \n{structure}\nat {saving_convention}...\n')

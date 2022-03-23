@@ -6,6 +6,9 @@ import torch
 import neat
 
 import sys
+
+from utils.features import get_width, get_num_voxels_type, get_size, get_height, get_eccentricity, get_elongation
+
 curr_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.join(curr_dir, '..')
 external_dir = os.path.join(root_dir, 'externals')
@@ -30,8 +33,10 @@ def get_cppn_input(structure_shape):
     d = ((x - center[0]) ** 2 + (y - center[1]) ** 2).sqrt()
     return x, y, d
 
+
 def get_robot_from_genome(genome, config):
-    nodes = create_cppn(genome, config, leaf_names=['x', 'y', 'd'], node_names=['empty', 'rigid', 'soft', 'hori', 'vert'])
+    nodes = create_cppn(genome, config, leaf_names=['x', 'y', 'd'],
+                        node_names=['empty', 'rigid', 'soft', 'hori', 'vert'])
     structure_shape = config.extra_info['structure_shape']
     x, y, d = get_cppn_input(structure_shape)
     material = []
@@ -40,6 +45,7 @@ def get_robot_from_genome(genome, config):
     material = np.vstack(material).argmax(axis=0)
     robot = material.reshape(structure_shape)
     return robot
+
 
 def eval_genome_fitness(genome, config, genome_id, generation):
     robot = get_robot_from_genome(genome, config)
@@ -55,7 +61,8 @@ def eval_genome_fitness(genome, config, genome_id, generation):
     )
     return fitness
 
-def eval_genome_constraint(genome, config, genome_id, generation):
+
+def eval_genome_constraint(genome, config):
     robot = get_robot_from_genome(genome, config)
     validity = is_connected(robot) and has_actuator(robot)
     if validity:
@@ -82,15 +89,26 @@ class SaveResultReporter(neat.BaseReporter):
         os.makedirs(save_path_controller, exist_ok=True)
 
     def post_evaluate(self, config, population, species, best_genome):
-        save_path_ranking = os.path.join(self.save_path, f'generation_{self.generation}', 'output.txt')
+        temp_path = os.path.join(self.save_path, f'generation_{self.generation}', 'output.txt')
+        f = open(temp_path, "w")
+        out = "\t\t".join(["label", "fitness", "size", "width", "height", "num_rigid", "num_soft", "num_h", "num_v",
+                           "elongation", "eccentricity", "reward"]) + "\n"
         genome_id_list, genome_list = np.arange(len(population)), np.array(list(population.values()))
         sorted_idx = sorted(genome_id_list, key=lambda i: genome_list[i].fitness, reverse=True)
         genome_id_list, genome_list = list(genome_id_list[sorted_idx]), list(genome_list[sorted_idx])
-        with open(save_path_ranking, 'w') as f:
-            out = ''
-            for genome_id, genome in zip(genome_id_list, genome_list):
-                out += f'{genome_id}\t\t{genome.fitness}\n'
-            f.write(out)
+        for genome_id, genome in zip(genome_id_list, genome_list):
+            body = get_robot_from_genome(genome, config)
+            out += "\t\t".join([str(genome_id), str(genome.fitness), str(get_size(body)),
+                                str(get_width(body)), str(get_height(body)),
+                                str(get_num_voxels_type(body, 1)),
+                                str(get_num_voxels_type(body, 2)),
+                                str(get_num_voxels_type(body, 3)),
+                                str(get_num_voxels_type(body, 4)),
+                                str(get_elongation(body)), str(get_eccentricity(body)),
+                                ",".join([str(r) for r in genome.rewards])]) + "\n"
+        f.write(out)
+        f.close()
+
 
 def run_cppn_neat(
         experiment_name,
@@ -98,9 +116,7 @@ def run_cppn_neat(
         pop_size,
         max_evaluations,
         train_iters,
-        num_cores,
-    ):
-
+        num_cores):
     save_path = os.path.join(root_dir, 'saved_data', experiment_name)
 
     try:
@@ -118,10 +134,10 @@ def run_cppn_neat(
 
     save_path_metadata = os.path.join(save_path, 'metadata.txt')
     with open(save_path_metadata, 'w') as f:
-        f.write(f'POP_SIZE: {pop_size}\n' \
-            f'STRUCTURE_SHAPE: {structure_shape[0]} {structure_shape[1]}\n' \
-            f'MAX_EVALUATIONS: {max_evaluations}\n' \
-            f'TRAIN_ITERS: {train_iters}\n')
+        f.write(f'POP_SIZE: {pop_size}\n'
+                f'STRUCTURE_SHAPE: {structure_shape[0]} {structure_shape[1]}\n'
+                f'MAX_EVALUATIONS: {max_evaluations}\n'
+                f'TRAIN_ITERS: {train_iters}\n')
 
     structure_hashes = {}
 

@@ -52,11 +52,12 @@ class ParallelEvaluator(object):
 
         # assign the fitness back to each genome
         for job, (_, genome) in zip(jobs, genomes):
-            genome.fitness = job.get(timeout=self.timeout)
+            genome.rewards = job.get(timeout=self.timeout)
+            genome.fitness = genome.rewards[-1]
 
-    def evaluate_constraint(self, genomes, config, generation):
+    def evaluate_constraint(self, genomes, config):
         validity_all = []
         for i, (_, genome) in enumerate(genomes):
-            validity = self.constraint_function(genome, config, i, generation)
+            validity = self.constraint_function(genome, config)
             validity_all.append(validity)
         return validity_all

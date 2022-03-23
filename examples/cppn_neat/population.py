@@ -1,6 +1,7 @@
 import neat
 import numpy as np
 
+
 class Population(neat.Population):
 
     def run(self, fitness_function, constraint_function=None, n=None):
@@ -32,17 +33,17 @@ class Population(neat.Population):
 
             self.reporters.start_generation(self.generation)
 
-            # Evaluate all genomes using the user-provided constraint function.
-            # If some genomes violate the constraint, generate new genomes and replace them, until all genomes satisfy the constraint.
+            # Evaluate all genomes using the user-provided constraint function. If some genomes violate the
+            # constraint, generate new genomes and replace them, until all genomes satisfy the constraint.
             if constraint_function is not None:
                 genomes = list(self.population.items())
-                validity = constraint_function(genomes, self.config, self.generation)
+                validity = constraint_function(genomes, self.config)
                 valid_idx = np.where(validity)[0]
                 valid_genomes = np.array(genomes)[valid_idx]
                 while len(valid_genomes) < self.config.pop_size:
                     new_population = self.reproduction.create_new(self.config.genome_type,
-                                                                    self.config.genome_config,
-                                                                    self.config.pop_size - len(valid_genomes))
+                                                                  self.config.genome_config,
+                                                                  self.config.pop_size - len(valid_genomes))
                     new_genomes = list(new_population.items())
                     validity = constraint_function(new_genomes, self.config, self.generation)
                     valid_idx = np.where(validity)[0]
