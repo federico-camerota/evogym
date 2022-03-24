@@ -234,6 +234,7 @@ def run_se(experiment_name, structure_shape, pop_size, max_evaluations, train_it
             c = 0
             while c < n_k[i]:
                 idx = c % len(cluster_idxs[i])
+                idx = cluster_idxs[i][idx]
                 child = mutate(structures[idx].body.copy(), mutation_rate = 0.1, num_attempts=50)
 
                 if child != None and hashable(child[0]) not in population_structure_hashes:
