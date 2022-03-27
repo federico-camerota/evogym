@@ -17,7 +17,7 @@ if __name__ == '__main__':
     best_robot, best_fitness = run_cppn_neat(
         experiment_name="-".join([task, str(seed)]),
         structure_shape=get_robot_shape(env),
-        pop_size=25,
+        pop_size=50,
         max_evaluations=get_number_evaluations(env),
         train_iters=1000,
         num_cores=25
