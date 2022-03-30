@@ -275,7 +275,7 @@ def run_se(experiment_name, structure_shape, pop_size, max_evaluations, train_it
         ranks = compute_ranks(structures, shape_features, cluster_idxs, cluster_centers)
         n_k = sum([alpha ** r for r in ranks])
         n_k = [n_children * (alpha ** r) / n_k for r in ranks]
-
+        print(len(species))
         # Produce children with mutations
         for i, s in species.items():
             c = 0
