@@ -38,7 +38,7 @@ def lazy_speciate(species, structures, shape_features, threshold=2):
             species[idx] = Species(struct, i)
             idx += 1
             continue
-        dists = [(s.pop[0], np.linalg.norm(shape_features[i] - shape_features[s.pop[0]])) for s in species.values()]
+        dists = [(k, np.linalg.norm(shape_features[i] - shape_features[s.pop[0]])) for k, s in species.items()]
         closest = min(dists, key=lambda x: x[1])
         if closest[1] >= threshold:
             species[idx] = Species(struct, i)
