@@ -31,7 +31,7 @@ class Species(object):
         self.pop = [i]
 
 
-def lazy_speciate(species, structures, shape_features, threshold=0.5):
+def lazy_speciate(species, structures, shape_features, threshold=1):
     idx = 0
     for i, struct in enumerate(structures):
         if not species:
