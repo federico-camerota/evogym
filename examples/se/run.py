@@ -18,7 +18,37 @@ from evogym import sample_robot, hashable
 import utils.mp_group as mp
 from utils.algo_utils import get_percent_survival_evals, mutate, TerminationCondition, Structure
 
-from sklearn.cluster import KMeans
+
+# from sklearn.cluster import KMeans
+# from pyclustering.cluster.center_initializer import kmeans_plusplus_initializer
+# from pyclustering.cluster.kmeans import kmeans as KMeans
+
+
+class Species(object):
+
+    def __init__(self, rep, i):
+        self.rep = rep
+        self.pop = [i]
+
+
+def lazy_speciate(species, structures, shape_features, threshold=0.5):
+    idx = 0
+    for i, struct in enumerate(structures):
+        if not species:
+            species[idx] = Species(struct, i)
+            idx += 1
+            continue
+        dists = [(s.pop[0], np.linalg.norm(shape_features[i] - shape_features[s.pop[0]])) for s in species.values()]
+        closest = min(dists, key=lambda x: x[1])
+        if closest[1] >= threshold:
+            species[idx] = Species(struct, i)
+            idx += 1
+        else:
+            species[closest[0]].pop.append(i)
+    cluster_idxs = [[1 if i in s.pop else 0 for i in range(len(structures))] for _, s in sorted(list(species.items()),
+                                                                                                key=lambda x: x[0])]
+    cluster_centers = [shape_features[s.pop[0]] for _, s in sorted(list(species.items()), key=lambda x: x[0])]
+    return cluster_centers, cluster_idxs
 
 
 def compute_ranks(structures, shape_features, cluster_idxs, cluster_centers):
@@ -135,7 +165,7 @@ def run_se(experiment_name, structure_shape, pop_size, max_evaluations, train_it
     while True:
 
         # UPDATE NUM SURVIORS #
-        percent_survival = get_percent_survival_evals(num_evaluations, max_evaluations)
+        percent_survival = 0.2  # get_percent_survival_evals(num_evaluations, max_evaluations)
         num_survivors = max(2, math.ceil(pop_size * percent_survival))
 
         # MAKE GENERATION DIRECTORIES #
@@ -217,15 +247,18 @@ def run_se(experiment_name, structure_shape, pop_size, max_evaluations, train_it
         print(structures[:num_survivors])
 
         # CLUSTERING #
-        n_clusters = 2
-        n_elite = 5
+        # n_clusters = 2
+        n_elite = 0
+        species = {}
 
         shape_features = np.array([s.body.flatten() for s in structures]) / 4
-        kmeans = KMeans(n_clusters=n_clusters)
+        # initial_centers = kmeans_plusplus_initializer(shape_features, n_clusters).initialize()
+        # kmeans = KMeans(shape_features, initial_centers)# KMeans(n_clusters=n_clusters)
 
-        cluster_labels = kmeans.fit_predict(shape_features)
-        cluster_centers = kmeans.cluster_centers_
-        cluster_idxs = [np.where(cluster_labels == c)[0].astype(int) for c in range(n_clusters)]
+        # cluster_labels = kmeans.fit_predict(shape_features)
+        # cluster_centers = kmeans.cluster_centers_
+        # cluster_idxs = [np.where(cluster_labels == c)[0].astype(int) for c in range(n_clusters)]
+        cluster_centers, cluster_idxs = lazy_speciate(species, structures, shape_features)
 
         # CROSSOVER AND MUTATION #
         # Save best structure and best for every cluster
@@ -244,7 +277,7 @@ def run_se(experiment_name, structure_shape, pop_size, max_evaluations, train_it
         n_k = [n_children * (alpha ** r) / n_k for r in ranks]
 
         # Produce children with mutations
-        for i in range(n_clusters):
+        for i, s in species.items():
             c = 0
             while c < n_k[i]:
                 idx = c % len(cluster_idxs[i])
