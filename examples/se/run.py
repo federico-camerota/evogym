@@ -239,7 +239,7 @@ def run_se(experiment_name, structure_shape, pop_size, max_evaluations, train_it
         f.close()
 
         # CHECK EARLY TERMINATION #
-        if generation == max_evaluations:
+        if num_evaluations == max_evaluations:
             print(f'Trained exactly {num_evaluations} robots')
             return
 
