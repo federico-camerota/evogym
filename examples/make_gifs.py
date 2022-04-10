@@ -252,7 +252,7 @@ if __name__ == '__main__':
 
     my_job = Job(
         name='test_ga',
-        experiment_names=['test_ga'],
+        experiment_names=['baseline_flat'],
         env_names=['Walker-v0'],
         ranks=[i for i in range(3)],
         load_dir=exp_root,
