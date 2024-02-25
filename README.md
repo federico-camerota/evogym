@@ -1,17 +1,27 @@
 # Evolution Gym (a Fork)
+This is the official repository for the *GECCO'23* paper
 
-A large-scale benchmark for co-optimizing the design and control of soft robots. As seen in [Evolution Gym: A Large-Scale Benchmark for Evolving Soft Robots](https://evolutiongym.github.io/) (**NeurIPS 2021**).
+**<a href="https://dl.acm.org/doi/abs/10.1145/3583131.3590429">How the Morphology Encoding Influences the Learning Ability in Body-Brain Co-Optimization</a>**
+<br>
+<a href="https://pigozzif.github.io">Federico Pigozzi</a>, Federico Camerota, and Eric Medvet
+<br>
 
-[//]: # (<img src="images/teaser.gif" alt="teaser" width="800"/>)
-![teaser](images/teaser.gif)
+<div align="center">
+<img src="teaser.gif"></img>
+</div>
 
 # Installation
 
 Clone the repo and submodules:
 
 ```shell
-git clone --recurse-submodules https://github.com/EvolutionGym/evogym.git
+git clone --recurse-submodules https://github.com/federico-camerota/evogym.git
 ```
+and checkout to target branch:
+```
+git checkout baldwin
+```
+Please note that only the **baldwin** branch contains the experiments for this paper (not, for example, the main).
 
 ### Requirements
 
@@ -69,34 +79,25 @@ brew install glfw
 ```
 --->
 
-# Usage
-
-## Examples
-
-To see example usage as well as to run co-design and control optimization experiments in EvoGym, please see the `examples` folder and its `README`.
-
-## Tutorials
-
-You can find tutorials for getting started with the codebase on our [website](https://evolutiongym.github.io/tutorials). Completed code from all tutorials is also available in the `tutorials` folder.
-
-## Docs
-
-You can find documentation on our [website](https://evolutiongym.github.io/documentation).
-
-## Design Tool
-
-For instructions on how to use the Evolution Gym Design Tool, please see [this repo](https://github.com/EvolutionGym/evogym-design-tool).
-
-# Citation
-
-If you find our repository helpful to your research, please cite our paper:
-
+## Usage
+Run:
 ```
-@article{bhatia2021evolution,
-  title={Evolution gym: A large-scale benchmark for evolving soft robots},
-  author={Bhatia, Jagdeep and Jackson, Holly and Tian, Yunsheng and Xu, Jie and Matusik, Wojciech},
-  journal={Advances in Neural Information Processing Systems},
-  volume={34},
-  year={2021}
+python examples/run_ga.py
+```
+for the experiments with GA and run:
+```
+python examples/run_cppn_neat.py
+```
+for the experiments with CPPN-NEAT.
+
+## Bibliography
+Please cite as:
+```
+@inproceedings{pigozzi2023evorl,
+  title={How the Morphology Encoding Influences the Learning Ability in Body-Brain Co-Optimization},
+  author={Pigozzi, Federico and Camerota Verd{\`u}, Federico Julian and Medvet, Eric},
+  booktitle={Proceedings of the Genetic and Evolutionary Computation Conference},
+  pages={1045--1054},
+  year={2023}
 }
 ```
